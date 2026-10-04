@@ -10,7 +10,10 @@ import {
   selectPreferredAudioTrack,
   serveGatewayJobSegment,
 } from "../gateway.js";
-import { createSignedGatewayStreamPath } from "../security.js";
+import {
+  createSignedBridgeV1StreamPath,
+  createSignedGatewayStreamPath,
+} from "../security.js";
 import {
   ensureTorrentReady,
   evaluateSeekableRemuxPreparation,
@@ -917,6 +920,309 @@ describe("gateway jobs", () => {
       expect.any(AbortSignal),
     );
     expect(serveTorrentFile).not.toHaveBeenCalled();
+  });
+
+  it("cancels abandoned HLS variant initialization when its only segment request disconnects", async () => {
+    const activeSession = {
+      waitUntilReady: vi.fn().mockResolvedValue(undefined),
+      readManifest: vi.fn().mockResolvedValue("#EXTM3U\n"),
+      readSegment: vi.fn().mockResolvedValue(Buffer.from("active")),
+      getPublishedWindow: vi.fn().mockReturnValue({ durationSeconds: 2 }),
+      close: vi.fn(),
+    };
+    const supportedTracks = [
+      {
+        id: "audio:1",
+        streamIndex: 1,
+        kind: "audio",
+        language: "en",
+        default: true,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+      {
+        id: "audio:2",
+        streamIndex: 2,
+        kind: "audio",
+        language: "en",
+        default: false,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+    ];
+    (probeMediaTracksAtUrl as any).mockResolvedValue(supportedTracks);
+    (createHlsRemuxSession as any).mockResolvedValueOnce(activeSession);
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+
+    let markCreationStarted!: () => void;
+    const creationStarted = new Promise<void>((resolve) => {
+      markCreationStarted = resolve;
+    });
+    let variantSignal: AbortSignal | undefined;
+    (createHlsRemuxSession as any).mockImplementationOnce(
+      (_file: unknown, options: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          variantSignal = options.signal;
+          options.signal.addEventListener(
+            "abort",
+            () => reject(options.signal.reason),
+            { once: true },
+          );
+          markCreationStarted();
+        }),
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remux: "mp4",
+      remuxStrategy: "hls",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    const job = getGatewayJob(created.body.id)!;
+    expect(job.hlsSessions?.get("audio:1")).toBe(activeSession);
+    const signedStreamPath = createSignedBridgeV1StreamPath(created.body.id);
+    const segmentPath = signedStreamPath
+      .replace("/stream?", "/segments/segment-000000.m4s?")
+      .concat("&audioTrack=2");
+    const segmentRequest: any = request(app).get(segmentPath);
+    segmentRequest.end(() => {});
+
+    try {
+      await creationStarted;
+      segmentRequest.abort();
+
+      await vi.waitFor(() => expect(variantSignal?.aborted).toBe(true), {
+        timeout: 300,
+      });
+      await vi.waitFor(() =>
+        expect(job.operationAbortControllers.size).toBe(0),
+      );
+      expect(job.hlsSessions?.get("audio:1")).toBe(activeSession);
+      expect(job.hlsSessions?.has("audio:2")).toBe(false);
+      expect(job.hlsSessionPromises?.has("audio:2")).toBe(false);
+      expect(activeSession.close).not.toHaveBeenCalled();
+    } finally {
+      segmentRequest.abort();
+      await request(app).delete(`/api/gateway/jobs/${created.body.id}`);
+    }
+  });
+
+  it("cancels abandoned HLS manifest variant initialization without failing the job", async () => {
+    const activeSession = {
+      waitUntilReady: vi.fn().mockResolvedValue(undefined),
+      readManifest: vi.fn().mockResolvedValue("#EXTM3U\n"),
+      readSegment: vi.fn().mockResolvedValue(Buffer.from("active")),
+      getPublishedWindow: vi.fn().mockReturnValue({ durationSeconds: 2 }),
+      close: vi.fn(),
+    };
+    (probeMediaTracksAtUrl as any).mockResolvedValue([
+      {
+        id: "audio:1",
+        streamIndex: 1,
+        kind: "audio",
+        language: "en",
+        default: true,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+      {
+        id: "audio:2",
+        streamIndex: 2,
+        kind: "audio",
+        language: "en",
+        default: false,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+    ]);
+    (createHlsRemuxSession as any).mockResolvedValueOnce(activeSession);
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+
+    let markCreationStarted!: () => void;
+    const creationStarted = new Promise<void>((resolve) => {
+      markCreationStarted = resolve;
+    });
+    let variantSignal: AbortSignal | undefined;
+    (createHlsRemuxSession as any).mockImplementationOnce(
+      (_file: unknown, options: { signal: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          variantSignal = options.signal;
+          options.signal.addEventListener(
+            "abort",
+            () => reject(options.signal.reason),
+            { once: true },
+          );
+          markCreationStarted();
+        }),
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remux: "mp4",
+      remuxStrategy: "hls",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    const job = getGatewayJob(created.body.id)!;
+    const manifestPath = `${createSignedGatewayStreamPath(created.body.id)}&audioTrack=2`;
+    const manifestRequest: any = request(app).get(manifestPath);
+    manifestRequest.end(() => {});
+
+    try {
+      await creationStarted;
+      manifestRequest.abort();
+
+      await vi.waitFor(() => expect(variantSignal?.aborted).toBe(true), {
+        timeout: 300,
+      });
+      await vi.waitFor(() => {
+        expect(job.operationAbortControllers.size).toBe(0);
+        expect(job.activeStreamCount).toBe(0);
+      });
+      expect(job.state).toBe("ready");
+      expect(job.hlsSessions?.get("audio:1")).toBe(activeSession);
+      expect(job.hlsSessions?.has("audio:2")).toBe(false);
+      expect(job.hlsSessionPromises?.has("audio:2")).toBe(false);
+    } finally {
+      manifestRequest.abort();
+      await request(app).delete(`/api/gateway/jobs/${created.body.id}`);
+    }
+  });
+
+  it("keeps shared HLS variant initialization alive while another segment request is waiting", async () => {
+    const activeSession = {
+      waitUntilReady: vi.fn().mockResolvedValue(undefined),
+      readManifest: vi.fn().mockResolvedValue("#EXTM3U\n"),
+      readSegment: vi.fn().mockResolvedValue(Buffer.from("active")),
+      getPublishedWindow: vi.fn().mockReturnValue({ durationSeconds: 2 }),
+      close: vi.fn(),
+    };
+    const variantSession = {
+      waitUntilReady: vi.fn().mockResolvedValue(undefined),
+      readManifest: vi.fn().mockResolvedValue("#EXTM3U\\n"),
+      readSegment: vi.fn().mockResolvedValue(Buffer.from("variant")),
+      getPublishedWindow: vi.fn().mockReturnValue({ durationSeconds: 2 }),
+      close: vi.fn(),
+    };
+    const supportedTracks = [
+      {
+        id: "audio:1",
+        streamIndex: 1,
+        kind: "audio",
+        language: "en",
+        default: true,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+      {
+        id: "audio:2",
+        streamIndex: 2,
+        kind: "audio",
+        language: "en",
+        default: false,
+        audioDescription: false,
+        commentary: false,
+        supported: true,
+      },
+    ];
+    (probeMediaTracksAtUrl as any).mockResolvedValue(supportedTracks);
+    (createHlsRemuxSession as any).mockResolvedValueOnce(activeSession);
+    (prepareTorrent as any).mockResolvedValueOnce({
+      infoHash: "abcdef123456",
+      numPeers: 1,
+      files: [{ name: "actual-video.mkv", streamURL: "/webtorrent/file" }],
+    });
+
+    let markCreationStarted!: () => void;
+    const creationStarted = new Promise<void>((resolve) => {
+      markCreationStarted = resolve;
+    });
+    let resolveVariant!: (session: typeof variantSession) => void;
+    let variantSignal: AbortSignal | undefined;
+    (createHlsRemuxSession as any).mockImplementationOnce(
+      (_file: unknown, options: { signal: AbortSignal }) => {
+        variantSignal = options.signal;
+        markCreationStarted();
+        return new Promise<typeof variantSession>((resolve) => {
+          resolveVariant = resolve;
+        });
+      },
+    );
+
+    const created = await request(app).post("/api/gateway/jobs").send({
+      magnet: "magnet:?xt=urn:btih:abcdef123456",
+      remux: "mp4",
+      remuxStrategy: "hls",
+    });
+    await vi.waitFor(async () => {
+      const status = await request(app).get(
+        `/api/gateway/jobs/${created.body.id}`,
+      );
+      expect(status.body.state).toBe("ready");
+    });
+
+    const job = getGatewayJob(created.body.id)!;
+    const signedStreamPath = createSignedBridgeV1StreamPath(created.body.id);
+    const segmentPath = signedStreamPath
+      .replace("/stream?", "/segments/segment-000000.m4s?")
+      .concat("&audioTrack=2");
+    const abandonedRequest: any = request(app).get(segmentPath);
+    abandonedRequest.end(() => {});
+    const survivingResponse = new Promise<any>((resolve, reject) => {
+      request(app)
+        .get(segmentPath)
+        .end((error, response) => (error ? reject(error) : resolve(response)));
+    });
+
+    try {
+      await creationStarted;
+      await vi.waitFor(() =>
+        expect(job.hlsSessionPromises?.get("audio:2")?.consumers).toBe(2),
+      );
+
+      abandonedRequest.abort();
+      await vi.waitFor(() =>
+        expect(job.hlsSessionPromises?.get("audio:2")?.consumers).toBe(1),
+      );
+      expect(variantSignal?.aborted).toBe(false);
+
+      resolveVariant(variantSession);
+      const response = await survivingResponse;
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(Buffer.from("variant"));
+      expect(job.hlsSessions?.get("audio:2")).toBe(variantSession);
+      expect(job.hlsSessions?.has("audio:1")).toBe(false);
+      expect(activeSession.close).toHaveBeenCalledWith(
+        "HLS audio variant replaced",
+      );
+    } finally {
+      abandonedRequest.abort();
+      await request(app).delete(`/api/gateway/jobs/${created.body.id}`);
+    }
   });
 
   it("selects an English main audio track before starting a progressive remux", async () => {

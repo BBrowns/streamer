@@ -74,6 +74,14 @@ export type GatewayJobState =
   | "error"
   | "cancelled"
   | "expired";
+
+type HlsSessionCreation = {
+  promise: Promise<HlsRemuxSession>;
+  abortController: AbortController;
+  consumers: number;
+  settled: boolean;
+};
+
 export type GatewayJobMode = "bridge" | "remux";
 export type GatewayRemuxStrategy =
   "seekable-cache" | "progressive-fmp4" | "hls";
@@ -148,7 +156,7 @@ export interface GatewayJob {
   /** Process-local HLS variants; never serialized or persisted. */
   hlsSessions?: Map<string, HlsRemuxSession>;
   /** Single-flight HLS creation per job/variant; never serialized. */
-  hlsSessionPromises?: Map<string, Promise<HlsRemuxSession>>;
+  hlsSessionPromises?: Map<string, HlsSessionCreation>;
   /** Abort controllers for HLS variants that are still being created. */
   hlsSessionAbortControllers?: Map<string, AbortController>;
   activeStreamCount: number;
@@ -1768,8 +1776,11 @@ async function getOrCreateHlsSession(
   job: GatewayJob,
   torrent: any,
   audioTrackId: string | undefined,
-  signal?: AbortSignal,
+  signal: AbortSignal,
 ) {
+  if (signal.aborted) {
+    throw signal.reason ?? new Error("HLS session request cancelled");
+  }
   const key = audioTrackId ?? "default";
   job.hlsSessions = job.hlsSessions ?? new Map();
   const hlsSessions = job.hlsSessions;
@@ -1777,7 +1788,9 @@ async function getOrCreateHlsSession(
   const existing = job.hlsSessions.get(key);
   if (existing) return existing;
   const inFlight = job.hlsSessionPromises.get(key);
-  if (inFlight) return inFlight;
+  if (inFlight) {
+    return waitForHlsSessionCreation(job, key, inFlight, signal);
+  }
   if (
     job.hlsSessions.size + job.hlsSessionPromises.size >=
     MAX_HLS_VARIANTS_PER_JOB
@@ -1786,12 +1799,6 @@ async function getOrCreateHlsSession(
   }
 
   const sessionAbortController = new AbortController();
-  const abortFromCaller = () =>
-    sessionAbortController.abort(
-      signal?.reason ?? new Error("HLS session request cancelled"),
-    );
-  if (signal?.aborted) abortFromCaller();
-  else signal?.addEventListener("abort", abortFromCaller, { once: true });
   job.hlsSessionAbortControllers = job.hlsSessionAbortControllers ?? new Map();
   job.hlsSessionAbortControllers.set(key, sessionAbortController);
 
@@ -1803,9 +1810,11 @@ async function getOrCreateHlsSession(
       sessionAbortController.signal,
     );
     try {
-      if (isGatewayJobCancelled(job)) {
-        session.close("Gateway job cancelled");
-        throw new Error("Gateway HLS session was cancelled.");
+      if (sessionAbortController.signal.aborted || isGatewayJobCancelled(job)) {
+        throw (
+          sessionAbortController.signal.reason ??
+          new Error("Gateway HLS session was cancelled.")
+        );
       }
       // A successful audio replacement supersedes the previous variant. Keep
       // the old process alive until this one has a first fragment, then close
@@ -1825,16 +1834,71 @@ async function getOrCreateHlsSession(
       throw error;
     }
   })();
-  job.hlsSessionPromises.set(key, creation);
-  try {
-    return await creation;
-  } finally {
-    signal?.removeEventListener("abort", abortFromCaller);
-    if (job.hlsSessionAbortControllers?.get(key) === sessionAbortController) {
-      job.hlsSessionAbortControllers.delete(key);
+  let entry!: HlsSessionCreation;
+  entry = {
+    promise: creation.finally(() => {
+      entry.settled = true;
+      if (job.hlsSessionAbortControllers?.get(key) === sessionAbortController) {
+        job.hlsSessionAbortControllers.delete(key);
+      }
+      if (job.hlsSessionPromises?.get(key) === entry) {
+        job.hlsSessionPromises.delete(key);
+      }
+    }),
+    abortController: sessionAbortController,
+    consumers: 0,
+    settled: false,
+  };
+  job.hlsSessionPromises.set(key, entry);
+  return waitForHlsSessionCreation(job, key, entry, signal);
+}
+
+async function waitForHlsSessionCreation(
+  job: GatewayJob,
+  key: string,
+  entry: HlsSessionCreation,
+  signal: AbortSignal,
+) {
+  if (signal.aborted) {
+    if (entry.consumers === 0 && !entry.settled) {
+      entry.abortController.abort(new Error("No HLS session requests remain"));
     }
-    if (job.hlsSessionPromises.get(key) === creation) {
-      job.hlsSessionPromises.delete(key);
+    throw signal.reason ?? new Error("HLS session request cancelled");
+  }
+
+  entry.consumers += 1;
+  try {
+    return await new Promise<HlsRemuxSession>((resolve, reject) => {
+      let finished = false;
+      const cleanup = () => {
+        signal.removeEventListener("abort", abort);
+      };
+      const finish = (complete: () => void) => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        complete();
+      };
+      const abort = () =>
+        finish(() =>
+          reject(signal.reason ?? new Error("HLS session request cancelled")),
+        );
+
+      signal.addEventListener("abort", abort, { once: true });
+      entry.promise.then(
+        (session) => finish(() => resolve(session)),
+        (error) => finish(() => reject(error)),
+      );
+      if (signal.aborted) abort();
+    });
+  } finally {
+    entry.consumers = Math.max(0, entry.consumers - 1);
+    if (
+      entry.consumers === 0 &&
+      !entry.settled &&
+      job.hlsSessionPromises?.get(key) === entry
+    ) {
+      entry.abortController.abort(new Error("No HLS session requests remain"));
     }
   }
 }
@@ -1918,6 +1982,7 @@ export async function serveGatewayJobSegment(
       job,
       runtime.torrent,
       audioTrackId,
+      requestAbortController.signal,
     );
     const segmentName = decodeURIComponent(req.params.segment);
     const bytes = await session.readSegment(
@@ -2420,24 +2485,50 @@ export async function serveGatewayJobStream(
     if (job.mode === "remux") {
       if (job.remuxStrategy === "hls") {
         addGatewayJobBreadcrumb(job, "gateway.hls_manifest_requested", "info");
-        const hlsSession = await getOrCreateHlsSession(
-          job,
-          torrent,
-          audioTrackId ?? job.audioTrackId,
-        );
-        const manifest = await hlsSession.readManifest();
-        res.set({
-          "Content-Type": "application/vnd.apple.mpegurl",
-          "Cache-Control": "no-store",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Expose-Headers": "Content-Type",
-        });
-        const rewrittenManifest = rewriteHlsManifest(job, req, manifest);
-        addGatewayJobBreadcrumb(job, "gateway.hls_manifest_served", "info", {
-          byteLength: Buffer.byteLength(rewrittenManifest),
-          ...hlsSession.getPublishedWindow(),
-        });
-        return res.status(200).send(rewrittenManifest);
+        const manifestAbortController = new AbortController();
+        job.operationAbortControllers.add(manifestAbortController);
+        let manifestResponseReady = false;
+        const abortManifestOnDisconnect = () => {
+          if (!manifestResponseReady) {
+            manifestAbortController.abort(
+              new Error("HLS manifest request cancelled"),
+            );
+          }
+        };
+        req.once("aborted", abortManifestOnDisconnect);
+        res.once("close", abortManifestOnDisconnect);
+        if (req.aborted || res.destroyed) abortManifestOnDisconnect();
+
+        try {
+          const hlsSession = await getOrCreateHlsSession(
+            job,
+            torrent,
+            audioTrackId ?? job.audioTrackId,
+            manifestAbortController.signal,
+          );
+          const manifest = await hlsSession.readManifest();
+          if (manifestAbortController.signal.aborted || res.destroyed) return;
+          res.set({
+            "Content-Type": "application/vnd.apple.mpegurl",
+            "Cache-Control": "no-store",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Expose-Headers": "Content-Type",
+          });
+          const rewrittenManifest = rewriteHlsManifest(job, req, manifest);
+          addGatewayJobBreadcrumb(job, "gateway.hls_manifest_served", "info", {
+            byteLength: Buffer.byteLength(rewrittenManifest),
+            ...hlsSession.getPublishedWindow(),
+          });
+          manifestResponseReady = true;
+          return res.status(200).send(rewrittenManifest);
+        } catch (error) {
+          if (manifestAbortController.signal.aborted || res.destroyed) return;
+          throw error;
+        } finally {
+          req.off("aborted", abortManifestOnDisconnect);
+          res.off("close", abortManifestOnDisconnect);
+          job.operationAbortControllers.delete(manifestAbortController);
+        }
       }
 
       const abortController = new AbortController();
