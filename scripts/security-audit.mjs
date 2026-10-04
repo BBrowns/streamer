@@ -3,7 +3,31 @@ import { pathToFileURL } from "node:url";
 
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
-export const REVIEWED_ADVISORIES = Object.freeze({});
+export const REVIEWED_ADVISORIES = Object.freeze({
+  "GHSA-VFJ7-8CJW-P6XM": {
+    dependency: "braces",
+    expiresOn: "2026-10-18",
+    owner: "mobile platform maintainers",
+    reason:
+      "The advisory has no published fix, and Tailwind 3 remains required by the current NativeWind compatibility contract.",
+    nextAction:
+      "Re-check by 2026-10-18 and remove this exception as soon as a patched braces 3.x release is available and resolved.",
+    scope: "braces@3.0.3 at node_modules/braces, currently used by Tailwind CSS 3.4.19",
+    allowedNodes: ["node_modules/braces"],
+  },
+  "GHSA-86W9-CPQP-85RV": {
+    dependency: "node-forge",
+    expiresOn: "2026-10-18",
+    owner: "mobile platform maintainers",
+    reason:
+      "The advisory has no published fix, and Expo SDK 57 currently resolves node-forge 1.4.0.",
+    nextAction:
+      "Re-check by 2026-10-18, update Expo or node-forge when a fixed release is available, and remove this exception.",
+    scope:
+      "node-forge@1.4.0 at node_modules/node-forge, used by Expo SDK 57 and @expo/cli 57.0.27",
+    allowedNodes: ["node_modules/node-forge"],
+  },
+});
 
 function advisoryId(url) {
   if (typeof url !== "string") return null;
@@ -12,7 +36,18 @@ function advisoryId(url) {
 
 function isExceptionActive(exception, now) {
   const expiresAt = Date.parse(`${exception.expiresOn}T23:59:59.999Z`);
-  return Number.isFinite(expiresAt) && now.getTime() <= expiresAt;
+  return (
+    typeof exception.owner === "string" &&
+    exception.owner.trim().length > 0 &&
+    typeof exception.reason === "string" &&
+    exception.reason.trim().length > 0 &&
+    typeof exception.nextAction === "string" &&
+    exception.nextAction.trim().length > 0 &&
+    typeof exception.scope === "string" &&
+    exception.scope.trim().length > 0 &&
+    Number.isFinite(expiresAt) &&
+    now.getTime() <= expiresAt
+  );
 }
 
 export function evaluateAuditReport(
@@ -40,9 +75,11 @@ export function evaluateAuditReport(
       seen.add(key);
 
       const exception = id ? exceptions[id] : undefined;
+      const allowedNodes = exception?.allowedNodes;
       const nodesMatch =
-        exception?.allowedNodes.length === nodes.length &&
-        nodes.every((node, index) => node === exception.allowedNodes[index]);
+        Array.isArray(allowedNodes) &&
+        allowedNodes.length === nodes.length &&
+        nodes.every((node, index) => node === allowedNodes[index]);
       if (
         exception &&
         exception.dependency === via.name &&
@@ -99,7 +136,8 @@ function runAudit() {
   for (const finding of reviewed) {
     console.warn(
       `Reviewed dependency finding: ${finding.id} (${finding.advisory.name}); ` +
-        `expires ${finding.exception.expiresOn}; scope: ${finding.exception.scope}.`,
+        `owner: ${finding.exception.owner}; expires ${finding.exception.expiresOn}; ` +
+        `scope: ${finding.exception.scope}; next: ${finding.exception.nextAction}.`,
     );
   }
 

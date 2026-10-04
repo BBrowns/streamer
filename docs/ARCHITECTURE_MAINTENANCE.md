@@ -8,7 +8,8 @@ dependency boundaries still requires the `streamer-change-design` workflow.
 `server/src/modules/aggregator/aggregator.service.ts` is the only current
 exception. It is a central legacy boundary with extensive characterization
 coverage, an owner in the server platform group, and a review deadline of
-2026-09-30. Its intended decomposition order is:
+2026-11-04. The next bounded extraction is upstream fetch and response
+validation, with focused consumer tests. Its intended decomposition order is:
 
 1. upstream fetch and response validation;
 2. search normalization, ranking, and cache state;
