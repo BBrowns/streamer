@@ -318,12 +318,12 @@ accessibility, and web pointer contracts intact. Keep
 enable the RNGH Jest setup, and run the mobile suite plus iOS/Android smoke
 builds before merging a future RNGH, React Native, or Expo major upgrade.
 
-The server direct Hono Node adapter follows the 2.x line (currently `2.1.3`),
-while `@hono/node-ws` retains its nested adapter until an upstream compatible
-release exists. The desktop app uses Electron `44.4.2` and direct
-`@electron/notarize` `3.1.1`;
-electron-builder may retain its own nested notarize 2.x contract. These nested
-paths are compatibility boundaries, not reasons to force global overrides.
+The server direct Hono Node adapter follows the 2.x line (currently `2.1.3`);
+`@hono/node-ws@1.3.1` resolves its `^1.19.11` peer to the root
+`@hono/node-server@1.19.17` package. The desktop app uses Electron `44.5.1` and
+direct `@electron/notarize` `3.1.1`; electron-builder may retain its own nested
+notarize 2.x contract. Keep these package paths as explicit compatibility
+boundaries rather than forcing global overrides.
 
 ## Upgrade Routine
 
