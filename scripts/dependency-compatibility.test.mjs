@@ -173,6 +173,10 @@ test("Expo 57 native modules stay on a compatible Worklets contract", () => {
   );
   assert.equal(safeArea.version, "5.10.0");
   assert.equal(
+    mobilePackage.dependencies["react-native-safe-area-context"],
+    "~5.10.0",
+  );
+  assert.equal(
     expoModulesCore.peerDependencies["react-native-worklets"],
     "^0.7.4 || ^0.8.0 || ^0.9.0 || ^0.10.0",
   );
@@ -198,10 +202,13 @@ test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
 test("Hono WebSocket tooling keeps its compatible peer beside the server adapter", () => {
   const lockfile = readLockfile();
   const rootPackage = lockfile.packages[""];
+  const serverPackage = lockfile.packages["server"];
   const websocketPackage = lockfile.packages["node_modules/@hono/node-ws"];
   const rootNodeServer = lockfile.packages["node_modules/@hono/node-server"];
   const serverNodeServer =
     lockfile.packages["server/node_modules/@hono/node-server"];
+  const serverNodeServerRange =
+    serverPackage.dependencies["@hono/node-server"];
 
   assert.equal(rootPackage.peerDependencies["@hono/node-server"], "1.19.17");
   assert.equal(rootNodeServer.version, "1.19.17");
@@ -210,7 +217,14 @@ test("Hono WebSocket tooling keeps its compatible peer beside the server adapter
     websocketPackage.peerDependencies["@hono/node-server"],
     "^1.19.11",
   );
-  assert.equal(serverNodeServer.version, "2.1.1");
+  assert.equal(semver.major(serverNodeServer.version), 2);
+  assert.ok(
+    semver.gte(semver.minVersion(serverNodeServerRange), "2.1.3"),
+  );
+  assert.ok(semver.gte(serverNodeServer.version, "2.1.3"));
+  assert(
+    semver.satisfies(serverNodeServer.version, serverNodeServerRange),
+  );
 });
 
 test("unused native adapters resolve without vulnerable parser packages", () => {

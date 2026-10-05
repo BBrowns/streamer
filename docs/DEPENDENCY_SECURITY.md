@@ -252,12 +252,15 @@ override and direct specifications aligned when upgrading Hono so the Hono
 adapters and shared client code are verified against one runtime contract.
 
 The server currently has two intentionally separate Hono Node adapters: the
-server workspace imports `@hono/node-server@2.1.1`, while `@hono/node-ws@1.3.1`
-requires a `^1.19.11` peer. The private root workspace declares the exact
+server workspace declares the 2.x line, currently locked at
+`@hono/node-server@2.1.3`, while `@hono/node-ws@1.3.1` requires a `^1.19.11`
+peer. Version 2.1.3 includes the fix for the path double-decode middleware
+bypass in GHSA-rmxm-3fg6-px4f. The private root workspace declares the exact
 `@hono/node-server@1.19.17` peer so npm installs that compatibility adapter
 alongside the server-local 2.x package. `npm run dependency:compatibility:test`
-asserts this topology; remove the root peer when `@hono/node-ws` supports the
-2.x adapter.
+asserts this topology and that the resolved server adapter satisfies its
+workspace range; remove the root peer when `@hono/node-ws` supports the 2.x
+adapter.
 
 NativeWind `4.2.x` currently brings `react-native-css-interop@0.2.6`, whose
 Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
@@ -266,7 +269,7 @@ NativeWind migration before accepting a Tailwind 4 major bump.
 
 The mobile app intentionally tracks React `19.3.0`, React Native `0.86.3`,
 Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`,
-react-native-screens `4.28.0`, and Sentry React Native `8.27.x` ahead of Expo
+react-native-screens `4.28.0`, and Sentry React Native `8.29.x` ahead of Expo
 SDK 57's bundled patch versions. The corresponding `expo.install.exclude`
 entries are reviewed
 exceptions, not permission to skip native validation; revisit them with the
@@ -289,7 +292,7 @@ nested React test renderer internally; that does not justify a Jest 30
 migration. AsyncStorage 3 also changes its Jest mock entrypoint to
 `@react-native-async-storage/async-storage/jest`. The tested native upgrades
 are now Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`, react-native-screens `4.28.0`, and
-Sentry React Native `8.27.x`; keep them aligned with Expo before changing the
+Sentry React Native `8.29.x`; keep them aligned with Expo before changing the
 SDK major. `expo-modules-core@57` accepts Worklets through the 0.10.x line, so
 Reanimated 4.6/Worklets 0.12 must wait for the next Expo SDK migration. These
 modules require the New Architecture and a fresh native rebuild; CI and
@@ -315,11 +318,12 @@ accessibility, and web pointer contracts intact. Keep
 enable the RNGH Jest setup, and run the mobile suite plus iOS/Android smoke
 builds before merging a future RNGH, React Native, or Expo major upgrade.
 
-The server direct Hono Node adapter is on `2.1.1`, while `@hono/node-ws`
-retains its nested adapter until an upstream compatible release exists. The
-desktop app uses Electron `44.4.2` and direct `@electron/notarize` `3.1.1`;
-electron-builder may retain its own nested notarize 2.x contract. These nested
-paths are compatibility boundaries, not reasons to force global overrides.
+The server direct Hono Node adapter follows the 2.x line (currently `2.1.3`);
+`@hono/node-ws@1.3.1` resolves its `^1.19.11` peer to the root
+`@hono/node-server@1.19.17` package. The desktop app uses Electron `44.5.1` and
+direct `@electron/notarize` `3.1.1`; electron-builder may retain its own nested
+notarize 2.x contract. Keep these package paths as explicit compatibility
+boundaries rather than forcing global overrides.
 
 ## Upgrade Routine
 
