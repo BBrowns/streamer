@@ -252,12 +252,15 @@ override and direct specifications aligned when upgrading Hono so the Hono
 adapters and shared client code are verified against one runtime contract.
 
 The server currently has two intentionally separate Hono Node adapters: the
-server workspace imports `@hono/node-server@2.1.1`, while `@hono/node-ws@1.3.1`
-requires a `^1.19.11` peer. The private root workspace declares the exact
+server workspace declares the 2.x line, currently locked at
+`@hono/node-server@2.1.3`, while `@hono/node-ws@1.3.1` requires a `^1.19.11`
+peer. Version 2.1.3 includes the fix for the path double-decode middleware
+bypass in GHSA-rmxm-3fg6-px4f. The private root workspace declares the exact
 `@hono/node-server@1.19.17` peer so npm installs that compatibility adapter
 alongside the server-local 2.x package. `npm run dependency:compatibility:test`
-asserts this topology; remove the root peer when `@hono/node-ws` supports the
-2.x adapter.
+asserts this topology and that the resolved server adapter satisfies its
+workspace range; remove the root peer when `@hono/node-ws` supports the 2.x
+adapter.
 
 NativeWind `4.2.x` currently brings `react-native-css-interop@0.2.6`, whose
 Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
@@ -315,9 +318,10 @@ accessibility, and web pointer contracts intact. Keep
 enable the RNGH Jest setup, and run the mobile suite plus iOS/Android smoke
 builds before merging a future RNGH, React Native, or Expo major upgrade.
 
-The server direct Hono Node adapter is on `2.1.1`, while `@hono/node-ws`
-retains its nested adapter until an upstream compatible release exists. The
-desktop app uses Electron `44.4.2` and direct `@electron/notarize` `3.1.1`;
+The server direct Hono Node adapter follows the 2.x line (currently `2.1.3`),
+while `@hono/node-ws` retains its nested adapter until an upstream compatible
+release exists. The desktop app uses Electron `44.4.2` and direct
+`@electron/notarize` `3.1.1`;
 electron-builder may retain its own nested notarize 2.x contract. These nested
 paths are compatibility boundaries, not reasons to force global overrides.
 
