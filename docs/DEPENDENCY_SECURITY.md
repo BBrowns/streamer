@@ -269,7 +269,7 @@ NativeWind migration before accepting a Tailwind 4 major bump.
 
 The mobile app intentionally tracks React `19.3.0`, React Native `0.86.3`,
 Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`,
-react-native-screens `4.28.0`, and Sentry React Native `8.27.x` ahead of Expo
+react-native-screens `4.28.0`, and Sentry React Native `8.29.x` ahead of Expo
 SDK 57's bundled patch versions. The corresponding `expo.install.exclude`
 entries are reviewed
 exceptions, not permission to skip native validation; revisit them with the
@@ -292,7 +292,7 @@ nested React test renderer internally; that does not justify a Jest 30
 migration. AsyncStorage 3 also changes its Jest mock entrypoint to
 `@react-native-async-storage/async-storage/jest`. The tested native upgrades
 are now Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`, react-native-screens `4.28.0`, and
-Sentry React Native `8.27.x`; keep them aligned with Expo before changing the
+Sentry React Native `8.29.x`; keep them aligned with Expo before changing the
 SDK major. `expo-modules-core@57` accepts Worklets through the 0.10.x line, so
 Reanimated 4.6/Worklets 0.12 must wait for the next Expo SDK migration. These
 modules require the New Architecture and a fresh native rebuild; CI and

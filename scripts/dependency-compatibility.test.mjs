@@ -173,6 +173,10 @@ test("Expo 57 native modules stay on a compatible Worklets contract", () => {
   );
   assert.equal(safeArea.version, "5.10.0");
   assert.equal(
+    mobilePackage.dependencies["react-native-safe-area-context"],
+    "~5.10.0",
+  );
+  assert.equal(
     expoModulesCore.peerDependencies["react-native-worklets"],
     "^0.7.4 || ^0.8.0 || ^0.9.0 || ^0.10.0",
   );
@@ -203,6 +207,8 @@ test("Hono WebSocket tooling keeps its compatible peer beside the server adapter
   const rootNodeServer = lockfile.packages["node_modules/@hono/node-server"];
   const serverNodeServer =
     lockfile.packages["server/node_modules/@hono/node-server"];
+  const serverNodeServerRange =
+    serverPackage.dependencies["@hono/node-server"];
 
   assert.equal(rootPackage.peerDependencies["@hono/node-server"], "1.19.17");
   assert.equal(rootNodeServer.version, "1.19.17");
@@ -212,11 +218,12 @@ test("Hono WebSocket tooling keeps its compatible peer beside the server adapter
     "^1.19.11",
   );
   assert.equal(semver.major(serverNodeServer.version), 2);
+  assert.ok(
+    semver.gte(semver.minVersion(serverNodeServerRange), "2.1.3"),
+  );
+  assert.ok(semver.gte(serverNodeServer.version, "2.1.3"));
   assert(
-    semver.satisfies(
-      serverNodeServer.version,
-      serverPackage.dependencies["@hono/node-server"],
-    ),
+    semver.satisfies(serverNodeServer.version, serverNodeServerRange),
   );
 });
 
