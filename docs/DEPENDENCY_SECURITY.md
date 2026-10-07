@@ -240,11 +240,17 @@ Node adapter; the dependency compatibility test must continue to prove that
 no `file-type` node is present. Owner: mobile/platform maintainers.
 
 `bittorrent-tracker@11.2.3` keeps its local UDP parser patch, while its `ip`
-edge is resolved to `ip-address@10.5.0` through a scoped npm override. The
+edge is resolved to `ip-address@10.7.3` through a scoped npm override. The
 tracker tests cover IPv4 conversion and fallback behavior, and the lockfile
 must not contain the vulnerable `ip` package. Remove both controls when a
 maintained tracker release removes the legacy edge and retains the tested
 parser behavior. Owner: stream-server/platform maintainers.
+
+Electron's download tooling resolves `http-cache-semantics@4.3.0` through a
+root override while its consumers still allow the older 4.x range. Owner:
+desktop platform maintainers. Remove the override when every download-tooling
+consumer requires 4.3.0 or newer; review at the next dependency upgrade. The
+tracker alias and ordinary ip-address paths use the same patched 10.7.3 line.
 
 The root Hono override is constrained to the tested `4.13.x` line, and the
 server/mobile direct dependencies resolve one compatible version. Keep the

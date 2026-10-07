@@ -16,6 +16,53 @@ function readLockfile() {
   );
 }
 
+test("Electron download cache policy resolves the maintained compatible release", () => {
+  const { packages } = readLockfile();
+  const entries = Object.entries(packages).filter(
+    ([path]) =>
+      path === "node_modules/http-cache-semantics" ||
+      path.endsWith("/node_modules/http-cache-semantics"),
+  );
+  assert.ok(entries.length > 0);
+  for (const [, info] of entries) assert.equal(info.version, "4.3.0");
+  const CachePolicy = require("http-cache-semantics");
+  const request = {
+    url: "https://example.invalid/asset",
+    method: "GET",
+    headers: {},
+  };
+  const policy = new CachePolicy(request, {
+    status: 200,
+    headers: { "cache-control": "public, max-age=600" },
+  });
+  assert.equal(policy.storable(), true);
+  assert.equal(policy.satisfiesWithoutRevalidation(request), true);
+  assert.equal(CachePolicy.fromObject(policy.toObject()).storable(), true);
+});
+
+test("maintained transitive utilities preserve their consumer APIs", () => {
+  const proxyAddr = require("proxy-addr");
+  assert.equal(proxyAddr.compile("loopback")("127.0.0.1"), true);
+  assert.equal(proxyAddr.compile("loopback")("192.0.2.1"), false);
+  const shellQuote = require("shell-quote");
+  const tokens = ["tool", "two words", "quoted'value"];
+  assert.deepEqual(shellQuote.parse(shellQuote.quote(tokens)), tokens);
+  const { SourceMapGenerator, SourceMapConsumer } = require("source-map-js");
+  const generator = new SourceMapGenerator({ file: "compiled.js" });
+  generator.addMapping({
+    generated: { line: 1, column: 0 },
+    original: { line: 2, column: 3 },
+    source: "source.js",
+  });
+  const consumer = new SourceMapConsumer(generator.toJSON());
+  assert.deepEqual(consumer.originalPositionFor({ line: 1, column: 0 }), {
+    source: "source.js",
+    line: 2,
+    column: 3,
+    name: null,
+  });
+});
+
 test("Vitest workspaces and coverage resolve one exact compatible version", () => {
   const { packages } = readLockfile();
   const vitest = packages["node_modules/vitest"];
@@ -207,8 +254,7 @@ test("Hono WebSocket tooling keeps its compatible peer beside the server adapter
   const rootNodeServer = lockfile.packages["node_modules/@hono/node-server"];
   const serverNodeServer =
     lockfile.packages["server/node_modules/@hono/node-server"];
-  const serverNodeServerRange =
-    serverPackage.dependencies["@hono/node-server"];
+  const serverNodeServerRange = serverPackage.dependencies["@hono/node-server"];
 
   assert.equal(rootPackage.peerDependencies["@hono/node-server"], "1.19.17");
   assert.equal(rootNodeServer.version, "1.19.17");
@@ -218,20 +264,18 @@ test("Hono WebSocket tooling keeps its compatible peer beside the server adapter
     "^1.19.11",
   );
   assert.equal(semver.major(serverNodeServer.version), 2);
-  assert.ok(
-    semver.gte(semver.minVersion(serverNodeServerRange), "2.1.3"),
-  );
+  assert.ok(semver.gte(semver.minVersion(serverNodeServerRange), "2.1.3"));
   assert.ok(semver.gte(serverNodeServer.version, "2.1.3"));
-  assert(
-    semver.satisfies(serverNodeServer.version, serverNodeServerRange),
-  );
+  assert(semver.satisfies(serverNodeServer.version, serverNodeServerRange));
 });
 
 test("unused native adapters resolve without vulnerable parser packages", () => {
   const lockfile = readLockfile();
   const browserAdapter = lockfile.packages["node_modules/@vibrant/image-node"];
-  const ipAdapter =
-    lockfile.packages["node_modules/bittorrent-tracker/node_modules/ip"];
+  const trackerRequire = createRequire(
+    import.meta.resolve("bittorrent-tracker"),
+  );
+  const ipAdapter = trackerRequire("ip/package.json");
   const ipNodes = Object.entries(lockfile.packages).filter(
     ([path]) => path === "node_modules/ip" || path.endsWith("/node_modules/ip"),
   );
@@ -252,11 +296,11 @@ test("unused native adapters resolve without vulnerable parser packages", () => 
   assert.ok(
     ipNodes.every(
       ([, packageInfo]) =>
-        packageInfo.name === "ip-address" && packageInfo.version === "10.5.0",
+        packageInfo.name === "ip-address" && packageInfo.version === "10.7.3",
     ),
   );
   assert.equal(ipAdapter.name, "ip-address");
-  assert.equal(ipAdapter.version, "10.5.0");
+  assert.equal(ipAdapter.version, "10.7.3");
 });
 
 test("registry lock entries retain immutable tarball and integrity pins", () => {
