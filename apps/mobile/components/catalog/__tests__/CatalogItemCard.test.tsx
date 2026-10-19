@@ -68,6 +68,16 @@ const createItem = (overrides: Partial<MetaPreview> = {}): MetaPreview => ({
 });
 
 describe("CatalogItemCard", () => {
+  it("includes visible card details in its accessible button name", async () => {
+    const screen = await render(<CatalogItemCard item={createItem()} />);
+
+    expect(
+      screen.getByRole("button", {
+        name: "Example Movie, common.media.movie, 2026, 7.4",
+      }),
+    ).toBeTruthy();
+  });
+
   it("passes poster URLs to the image component as uri sources", async () => {
     const poster = "https://images.example.test/poster.jpg";
     const screen = await render(

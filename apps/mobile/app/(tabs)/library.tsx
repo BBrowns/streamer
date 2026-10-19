@@ -559,7 +559,7 @@ export default function LibraryScreen() {
                 <View style={styles.historyLoading}>
                   <ActivityIndicator color={colors.textSecondary} />
                 </View>
-              ) : null
+              ) : undefined
             }
             refreshControl={
               <RefreshControl

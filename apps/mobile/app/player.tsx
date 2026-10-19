@@ -867,7 +867,7 @@ export default function PlayerScreen() {
   ]);
 
   const player = useVideoPlayer(
-    hlsPlaybackRequested ? "" : playbackUri || "",
+    hlsPlaybackRequested || !playbackUri ? null : playbackUri,
     (p) => {
       p.staysActiveInBackground = true;
       p.showNowPlayingNotification = true;

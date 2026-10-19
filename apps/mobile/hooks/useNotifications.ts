@@ -49,7 +49,7 @@ export function useNotifications({ poll = false }: { poll?: boolean } = {}) {
     (state) => state.credentialsHydrated,
   );
   const [appState, setAppState] = useState<AppStateStatus | null>(
-    AppState.currentState,
+    AppState.currentState ? (AppState.currentState as AppStateStatus) : null,
   );
   const [documentVisibility, setDocumentVisibility] =
     useState<DocumentVisibilityState | null>(getDocumentVisibility);

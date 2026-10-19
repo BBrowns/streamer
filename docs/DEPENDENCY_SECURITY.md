@@ -116,7 +116,7 @@ October 2026 lockfile remediation below advances all compatible brace-expansion
 lines beyond their current patched versions.
 
 The root override keeps `js-yaml@4.3.2` for Hono consumers. Nodemailer is
-pinned to `10.0.10` in the root workspace and root override, while the server
+pinned to `10.1.1` in the root workspace and root override, while the server
 workspace declares `^10.0.10`. Nodemailer 10 requires Node.js 20 or newer and
 ships its own TypeScript declarations; the server imports its named
 `Transporter` type from that package, so `@types/nodemailer` is removed. The
@@ -131,7 +131,7 @@ The 2026-09-08 full and production dependency audits reported no advisories at
 that time. Current production findings and any temporary exceptions are tracked
 below.
 
-Vitest and its V8 coverage provider now use the same exact 5.0.0 version in
+Vitest and its V8 coverage provider now use the same exact 5.0.5 version in
 all three test workspaces. Vite stays on the supported 7.x override and Node
 stays on 26.7.0. The dependency compatibility test rejects divergent workspace
 or coverage peer versions. Review future upgrades as one toolchain change.
@@ -149,13 +149,10 @@ approval at the next Sentry CLI upgrade.
 Two parser updates require temporary consumer patches rather than a blind
 major override:
 
-- `query-string@7.1.3` resolves `decode-uri-component@0.5.0`. Its patch unwraps
-  the ESM default export for the existing CommonJS caller. This keeps Expo's
-  query parsing API while using the upstream bounded decoder. Mobile Jest also
-  transforms this ESM dependency, with an unmocked query parser regression test.
-  Owner: mobile
-  platform maintainers. Remove the patch and scoped override when Expo Router
-  adopts a query-string release using the repaired decoder directly.
+- The previous `query-string` compatibility patch and nested override were
+  removed during the SDK58 upgrade because the resolved Expo Router dependency
+  graph no longer installs that package. If a future SDK reintroduces it, add a
+  consumer-level parsing regression before restoring a patch or override.
 - `stream-json@3.6.0` replaces the vulnerable 1.x dependency used only by
   Detox and Bunyamin. Their pinned patches select the new JSONL/array entry
   points and explicit Node stream adapters. Bunyamin's CommonJS, ESM and
@@ -165,10 +162,12 @@ major override:
   upstream. The compatibility tests cover chunked records, malformed JSONL,
   stream completion and trace merging in both module formats.
 
-The existing Expo Updates Android dev-client patch is retargeted unchanged to
-57.0.22. Remove it after an upstream update preserves the tested Detox startup
-behavior without the patch. Owner: mobile platform maintainers. Review these
-patches at the next dependency upgrade and before the next release candidate.
+The Expo Updates Android dev-client patch is retargeted to `58.0.17`, and the
+Expo Video Android/iOS patch is retargeted to `58.0.11` after applying each
+patch against the SDK58 package source. Remove either patch once an upstream
+update preserves the tested startup and playback behavior without it. Owner:
+mobile platform maintainers. Review these patches before the next release
+candidate.
 
 ## October 2026 CI Remediation
 
@@ -186,7 +185,7 @@ Advisory Database lists no patched version: `braces@3.0.3` at
 `node_modules/braces` ([GHSA-VFJ7-8CJW-P6XM](https://github.com/advisories/GHSA-VFJ7-8CJW-P6XM))
 and `node-forge@1.4.0` at `node_modules/node-forge`
 ([GHSA-86W9-CPQP-85RV](https://github.com/advisories/GHSA-86W9-CPQP-85RV)). The
-audit permits only those exact package paths until 2026-10-18. Owner: mobile
+audit permits only those exact package paths until 2026-11-19. Owner: mobile
 platform maintainers. Re-check upstream status by that date, upgrade to a fixed
 release as soon as one is available, and remove the matching exception. If
 either package still has no compatible fix on the expiry date, the production
@@ -273,39 +272,28 @@ Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
 pins `tailwindcss@3.4.19`; keep the compatibility test in place and review the
 NativeWind migration before accepting a Tailwind 4 major bump.
 
-The mobile app intentionally tracks React `19.3.0`, React Native `0.86.3`,
-Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`,
-react-native-screens `4.28.0`, and Sentry React Native `8.29.x` ahead of Expo
-SDK 57's bundled patch versions. The corresponding `expo.install.exclude`
-entries are reviewed
-exceptions, not permission to skip native validation; revisit them with the
-next Expo SDK upgrade and rebuild native projects after changing these modules.
-AsyncStorage `3.1.1` is also intentionally excluded because Expo SDK 57 still
-advertises the 2.x line; its new Jest entrypoint and the repository's full
-mobile suite are covered, while native-device validation remains deferred.
-`@shopify/flash-list` is also an existing intentional exception because the
-repository tracks its tested release above the SDK 57 bundled version.
+The mobile app now follows Expo SDK58's React `19.3.0`, React Native
+`0.88.0`, Reanimated `4.7.1`, Worklets `0.13.0`, safe-area-context
+`5.10.1`, and react-native-screens `4.30.0` compatibility versions. Sentry
+React Native `8.31.x`, AsyncStorage `3.1.1`, and Flash List `2.3.3` remain
+intentional `expo.install.exclude` exceptions because the workspace tracks
+them above the SDK's bundled recommendations. These exclusions are not
+permission to skip native validation. AsyncStorage 3 keeps its
+`@react-native-async-storage/async-storage/jest` entrypoint; native-device
+validation remains deferred.
 
-The current native/tooling migration keeps the Expo SDK 57 contract on React
-`19.3.0` and React Native `0.86.3`. The root and mobile workspaces both pin
-React Native and `@react-native/jest-preset` to `0.86.3` so npm's hoisted Expo
-peer dependencies cannot resolve an older RN patch line. React Native Testing
-Library `14.0.1`
-therefore uses `test-renderer@1.2.0`, the React 19-compatible replacement for
-the deprecated direct `react-test-renderer` dependency. `jest-expo@57.0.5`
-aligns with the React Native `0.86.3` Jest preset, but may still retain a
-nested React test renderer internally; that does not justify a Jest 30
-migration. AsyncStorage 3 also changes its Jest mock entrypoint to
-`@react-native-async-storage/async-storage/jest`. The tested native upgrades
-are now Reanimated `4.5.5`, Worklets `0.10.4`, safe-area-context `5.10.0`, react-native-screens `4.28.0`, and
-Sentry React Native `8.29.x`; keep them aligned with Expo before changing the
-SDK major. `expo-modules-core@57` accepts Worklets through the 0.10.x line, so
-Reanimated 4.6/Worklets 0.12 must wait for the next Expo SDK migration. These
-modules require the New Architecture and a fresh native rebuild; CI and
-simulator evidence are part of this migration's merge gate.
+The current native/tooling migration keeps the Expo SDK58 contract on React
+`19.3.0` and React Native `0.88.0`. Root and mobile workspaces pin React
+Native and `@react-native/jest-preset` to `0.88.0` so npm's hoisted Expo peer
+dependencies cannot resolve an older RN line. React Native Testing Library
+`14.0.1` uses `test-renderer@1.3.1`, and `jest-expo@58.0.11` aligns with the
+SDK preset and Jest `30.5.2` with `@types/jest@30.0.0`. Expo Modules Core 58
+accepts Worklets `>=0.13.0`, matching Reanimated `4.7.1`. These modules use
+the New Architecture and require a fresh native rebuild; prebuild and simulator
+evidence are part of this migration's merge gate.
 
 Android instrumentation builds also load the Expo aggregate `:expo` library.
-Expo SDK 57 can contribute the same native runtime libraries from
+Expo SDK 58 can contribute the same native runtime libraries from
 `expo-updates` and React Native, so
 `apps/mobile/plugins/withAndroidLibraryNativePackaging.js` adds Gradle
 `pickFirsts` to every Android library module during Expo prebuild. This keeps
@@ -340,6 +328,9 @@ boundaries rather than forcing global overrides.
    release gate.
 5. Review the full `npm audit` output and update the exception table when its
    contents change.
+
+After any approved dependency or compatibility update, review this baseline
+before the next release candidate.
 
 Latest does not mean automatically accepting every major release. Framework
 majors such as Expo, Electron, Prisma, or Vite require their own migration and
