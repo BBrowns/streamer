@@ -192,7 +192,9 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? "home" : "home-outline"}
               size={24}
-              color={color}
+              color={
+                typeof color === "number" ? undefined : (color ?? undefined)
+              }
             />
           ),
           tabBarAccessibilityLabel: t("tabs.home"),
@@ -207,7 +209,9 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? "compass" : "compass-outline"}
               size={24}
-              color={color}
+              color={
+                typeof color === "number" ? undefined : (color ?? undefined)
+              }
             />
           ),
           tabBarAccessibilityLabel: t("tabs.discover"),
@@ -223,7 +227,9 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? "search" : "search-outline"}
               size={24}
-              color={color}
+              color={
+                typeof color === "number" ? undefined : (color ?? undefined)
+              }
             />
           ),
           tabBarAccessibilityLabel: t("tabs.search", {
@@ -239,7 +245,9 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? "bookmark" : "bookmark-outline"}
               size={24}
-              color={color}
+              color={
+                typeof color === "number" ? undefined : (color ?? undefined)
+              }
             />
           ),
           tabBarAccessibilityLabel: t("tabs.library"),
@@ -253,7 +261,9 @@ export default function TabLayout() {
             <Ionicons
               name={focused ? "cloud-download" : "cloud-download-outline"}
               size={24}
-              color={color}
+              color={
+                typeof color === "number" ? undefined : (color ?? undefined)
+              }
             />
           ),
           tabBarAccessibilityLabel: t("tabs.downloads"),
@@ -264,12 +274,18 @@ export default function TabLayout() {
         options={{
           title: t("tabs.settings"),
           tabBarButtonTestID: "tab-settings",
-          href: null,
+          // `href: null` hides the route and redirects cold links in newer
+          // Expo Router versions. Keep Settings addressable, but remove its
+          // button and item so the visible tabs keep their full-width layout.
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: "none" },
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "settings" : "settings-outline"}
               size={24}
-              color={color}
+              color={
+                typeof color === "number" ? undefined : (color ?? undefined)
+              }
             />
           ),
           tabBarAccessibilityLabel: t("tabs.settings"),

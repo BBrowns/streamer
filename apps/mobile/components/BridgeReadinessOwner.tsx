@@ -42,7 +42,7 @@ export function BridgeReadinessOwner() {
   );
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [appState, setAppState] = useState<AppStateStatus>(
-    AppState.currentState,
+    (AppState.currentState ?? "active") as AppStateStatus,
   );
   const [documentVisible, setDocumentVisible] = useState(getDocumentVisible);
 

@@ -1,10 +1,5 @@
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  View,
-  type ViewStyle,
-} from "react-native";
+import type { ComponentProps } from "react";
+import { Platform, Pressable, View } from "react-native";
 import { useTheme } from "../../hooks/useTheme";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import {
@@ -21,6 +16,8 @@ type AppSwitchProps = {
   disabled?: boolean;
   testID?: string;
 };
+
+type ViewStyleProp = ComponentProps<typeof View>["style"];
 
 export function AppSwitch({
   value,
@@ -81,14 +78,14 @@ export function AppSwitch({
   );
 }
 
-const styles = StyleSheet.create<Record<string, ViewStyle>>({
+const styles = {
   target: {
     width: uiTouchTarget,
     height: uiTouchTarget,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: uiTouchTarget / 2,
-  },
+  } satisfies ViewStyleProp,
   track: {
     width: 40,
     height: 24,
@@ -96,15 +93,16 @@ const styles = StyleSheet.create<Record<string, ViewStyle>>({
     borderWidth: 1,
     padding: 1,
     justifyContent: "center",
-  },
+  } satisfies ViewStyleProp,
   thumb: {
     width: 20,
     height: 20,
     borderRadius: 10,
-  },
+  } satisfies ViewStyleProp,
   thumbMotion: {
     transition: `transform ${uiMotion.feedback}ms ease`,
-  } as ViewStyle,
-  pressed: { opacity: 0.72 },
-  disabled: { opacity: 0.42 },
-});
+    // This CSS shorthand is web-only; the native ViewStyle type omits it.
+  } as unknown as ViewStyleProp,
+  pressed: { opacity: 0.72 } satisfies ViewStyleProp,
+  disabled: { opacity: 0.42 } satisfies ViewStyleProp,
+} satisfies Record<string, ViewStyleProp>;

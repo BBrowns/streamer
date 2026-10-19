@@ -3,6 +3,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   StyleProp,
   StyleSheet,
   Text,
@@ -76,7 +77,7 @@ export function ContentTabs<T extends string>({
   const { colors } = useTheme();
   const tabRefs = useRef<any[]>([]);
   const tabLayouts = useRef<Record<number, { x: number; width: number }>>({});
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const scrollOffset = useRef(0);
   const [viewportWidth, setViewportWidth] = useState(0);
   const ensureTabVisible = useCallback(

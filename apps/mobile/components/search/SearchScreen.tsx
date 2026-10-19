@@ -129,7 +129,7 @@ export function SearchScreen() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchFieldFocused, setSearchFieldFocused] = useState(false);
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
-  const searchAreaRef = useRef<View>(null);
+  const searchAreaRef = useRef<React.ComponentRef<typeof View>>(null);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchController = useSearchController({
     initialQuery: routeState.q,

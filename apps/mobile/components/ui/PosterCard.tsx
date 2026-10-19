@@ -76,6 +76,14 @@ export function PosterCard({
   const { isKeyboardFocused, webPressableProps } = useWebPressableActivation(
     onActivate ?? onPress,
   );
+  const accessibleName = [
+    title,
+    eyebrow,
+    metadata,
+    rating ? String(rating) : undefined,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Pressable
@@ -87,7 +95,7 @@ export function PosterCard({
       // @ts-ignore web-only context menu
       onContextMenu={Platform.OS === "web" ? onContextMenu : undefined}
       accessibilityRole={accessibilityRole}
-      accessibilityLabel={title}
+      accessibilityLabel={accessibleName}
       accessibilityHint={accessibilityHint}
       accessibilityState={accessibilityState ?? { selected }}
       testID={testID}
