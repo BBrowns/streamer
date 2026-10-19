@@ -329,6 +329,9 @@ boundaries rather than forcing global overrides.
 5. Review the full `npm audit` output and update the exception table when its
    contents change.
 
+After any approved dependency or compatibility update, review this baseline
+before the next release candidate.
+
 Latest does not mean automatically accepting every major release. Framework
 majors such as Expo, Electron, Prisma, or Vite require their own migration and
 runtime QA rather than being folded into a security patch.
