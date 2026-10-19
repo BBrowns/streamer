@@ -1,5 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { PlayerOverlay } from "../PlayerOverlay";
 import { playerChrome } from "../playerChrome";
 
@@ -34,6 +34,53 @@ jest.mock("../../../hooks/useTheme", () => ({
 }));
 
 describe("PlayerOverlay", () => {
+  it("holds chrome only for keyboard focus and releases it on pointer input", async () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+    const onControlFocusChange = jest.fn();
+    try {
+      const screen = await render(
+        <PlayerOverlay
+          currentStream={{ title: "Example stream" } as any}
+          engineType="hls"
+          stats={{ peers: 0, speed: 0, progress: 0 } as any}
+          onClose={jest.fn()}
+          onControlFocusChange={onControlFocusChange}
+        />,
+      );
+      const chrome = screen.getByTestId("player-top-chrome");
+      const currentTarget = { matches: () => false };
+      await fireEvent(chrome, "focus", {
+        currentTarget,
+        target: { matches: () => false },
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(false);
+      await fireEvent(chrome, "focus", {
+        currentTarget,
+        target: {
+          matches: (selector: string) => selector === ":focus-visible",
+        },
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(true);
+      await fireEvent(chrome, "pointerDown");
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(false);
+      await fireEvent(chrome, "keyDownCapture", {
+        target: { matches: () => true },
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(true);
+      await fireEvent(chrome, "blur", {
+        currentTarget: { contains: () => false },
+        relatedTarget: null,
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(false);
+    } finally {
+      Object.defineProperty(Platform, "OS", {
+        configurable: true,
+        value: originalPlatform,
+      });
+    }
+  });
+
   it("renders optional stream info as a top panel instead of a bottom bar", async () => {
     const screen = await render(
       <PlayerOverlay

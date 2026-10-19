@@ -21,6 +21,7 @@ import {
 } from "../ui/designSystem";
 import { useUiMotion } from "../../hooks/useUiMotion";
 import { useWindowClass } from "../../hooks/useWindowClass";
+import { isFocusVisibleEvent } from "../../hooks/useWebPressableActivation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { playerChrome } from "./playerChrome";
 import { PlayerTimeline } from "./PlayerTimeline";
@@ -338,8 +339,16 @@ export function PlayerControls({
       testID="player-controls-cinematic"
       {...((Platform.OS === "web"
         ? {
-            onFocusCapture: () => onControlFocusChange?.(true),
-            onBlurCapture: (event: any) => {
+            onFocus: (event: any) =>
+              onControlFocusChange?.(
+                isFocusVisibleEvent({ target: event.target }),
+              ),
+            onKeyDownCapture: (event: any) =>
+              onControlFocusChange?.(
+                isFocusVisibleEvent({ target: event.target }),
+              ),
+            onPointerDown: () => onControlFocusChange?.(false),
+            onBlur: (event: any) => {
               if (!event.currentTarget?.contains?.(event.relatedTarget)) {
                 onControlFocusChange?.(false);
               }
@@ -364,6 +373,7 @@ export function PlayerControls({
           focusColor={focusColor}
         />
         <Pressable
+          testID="player-play-pause-button"
           style={({ pressed, hovered, focused }: any) => [
             styles.playPauseBtn,
             Platform.OS === "web" && styles.webInteractive,

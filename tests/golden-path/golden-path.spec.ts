@@ -653,10 +653,11 @@ test("player timeline preview and adaptive settings remain usable", async ({
   await page.getByRole("button", { name: "Play" }).click();
 
   await expect(page).toHaveURL(/\/player$/);
+  const playerScreen = page.getByTestId("player-screen");
+  await expect(playerScreen).toBeVisible();
+  // Pointer movement reveals the chrome; a click would toggle it closed.
+  await playerScreen.hover({ position: { x: 8, y: 8 } });
   const timeline = page.getByTestId("player-progress-slider");
-  if (!(await timeline.isVisible())) {
-    await page.getByTestId("player-hit-zone-center").click();
-  }
   await expect(timeline).toBeVisible();
   await expect(timeline).toHaveAttribute("aria-label", "Playback progress");
   const timelineBox = await timeline.boundingBox();
