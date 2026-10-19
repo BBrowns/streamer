@@ -31,7 +31,7 @@
     "@hono/zod-validator": "^0.9.0",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
-    "@scalar/hono-api-reference": "^0.12.11",
+    "@scalar/hono-api-reference": "^0.12.12",
     "@sentry/node": "^11.2.0",
     "@streamer/shared": "*",
     "axios": "^1.20.0",
@@ -47,12 +47,12 @@
     "pino": "^10.4.0",
     "pino-pretty": "^13.2.0",
     "uuid": "^14.0.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@prisma/config": "^7.8.0",
-    "@testcontainers/postgresql": "^12.2.0",
+    "@testcontainers/postgresql": "^12.2.1",
     "@types/bcryptjs": "^3.0.0",
     "@types/jsonwebtoken": "^9.0.0",
     "@types/pg": "^8.23.1",
