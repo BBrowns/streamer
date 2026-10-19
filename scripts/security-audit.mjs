@@ -11,12 +11,12 @@ export const LOCAL_SECURITY_PATCHES = Object.freeze({
   "GHSA-VFJ7-8CJW-P6XM": {
     dependency: "braces",
     version: "3.0.3",
-    reviewBy: "2026-10-18",
+    reviewBy: "2026-11-19",
     owner: "mobile platform maintainers",
     reason:
       "The published braces 3.0.3 package has no upstream fix; the parser now bounds nesting before recursive AST walkers run.",
     nextAction:
-      "Re-check the upstream advisory by 2026-10-18 and remove this local patch when a fixed braces 3.x release is available and resolved.",
+      "Re-check the upstream advisory by 2026-11-19 and remove this local patch when a fixed braces 3.x release is available and resolved.",
     scope:
       "braces@3.0.3 at node_modules/braces, currently used by Tailwind CSS 3.4.19",
     allowedNodes: ["node_modules/braces"],
@@ -28,14 +28,14 @@ export const LOCAL_SECURITY_PATCHES = Object.freeze({
   "GHSA-86W9-CPQP-85RV": {
     dependency: "node-forge",
     version: "1.4.0",
-    reviewBy: "2026-10-18",
+    reviewBy: "2026-11-19",
     owner: "mobile platform maintainers",
     reason:
       "The published node-forge 1.4.0 package has no upstream release fix; verification now rejects unconsumed nested DigestAlgorithm elements.",
     nextAction:
-      "Re-check upstream PR #1152 by 2026-10-18 and remove this local patch when a fixed node-forge release is available and resolved.",
+      "Re-check the upstream fix status by 2026-11-19 and remove this local patch when a fixed node-forge release is available and resolved.",
     scope:
-      "node-forge@1.4.0 at node_modules/node-forge, used by Expo SDK 57 and @expo/cli 57.0.27",
+      "node-forge@1.4.0 at node_modules/node-forge, used by Expo SDK 58 and @expo/cli 58.0.14",
     allowedNodes: ["node_modules/node-forge"],
     packageJsonPath: "node_modules/node-forge/package.json",
     sourcePath: "node_modules/node-forge/lib/rsa.js",

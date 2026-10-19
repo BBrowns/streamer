@@ -246,7 +246,7 @@ export function MediaRail<Item>({
                 <View style={styles.fetchingMore}>
                   <ActivityIndicator color={colors.textSecondary} />
                 </View>
-              ) : null
+              ) : undefined
             }
           />
 

@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ComponentRef, type ReactNode } from "react";
 import { useWindowClass, type WindowClass } from "../../hooks/useWindowClass";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useTheme } from "../../hooks/useTheme";
@@ -117,7 +117,7 @@ export function AdaptiveOverlay({
   const { presentation } = layout;
   const backdropColor =
     resolveAdaptiveOverlayBackdrop(backdrop, isDark) ?? colors.scrim;
-  const surfaceRef = useRef<View>(null);
+  const surfaceRef = useRef<ComponentRef<typeof View>>(null);
 
   useEffect(() => {
     if (!visible || Platform.OS !== "web" || typeof document === "undefined") {

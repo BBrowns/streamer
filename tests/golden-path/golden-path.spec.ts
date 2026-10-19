@@ -1582,31 +1582,32 @@ test("Command Palette distinguishes submit from deliberate title navigation", as
   await page.keyboard.press("k");
   await expect(page.getByTestId("command-palette")).toHaveCount(0);
   await page.keyboard.press("Meta+k");
-  await expect(page.getByTestId("command-palette")).toBeVisible();
-  const field = page.getByTestId("command-search-field");
+  const commandPalette = page.getByTestId("command-palette");
+  await expect(commandPalette).toBeVisible();
+  const field = commandPalette.getByTestId("command-search-field");
   await field.fill("Golden");
   await expect(
-    page.getByTestId(`search-result-movie-${FIXTURE_MOVIE_ID}`),
+    commandPalette.getByTestId(`search-result-movie-${FIXTURE_MOVIE_ID}`),
   ).toBeVisible();
   await field.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=Golden/);
 
   await page.keyboard.press("Control+k");
-  await expect(page.getByTestId("command-palette")).toBeVisible();
-  const controlField = page.getByTestId("command-search-field");
+  await expect(commandPalette).toBeVisible();
+  const controlField = commandPalette.getByTestId("command-search-field");
   await controlField.fill("Golden");
   await expect(
-    page.getByTestId(`search-result-movie-${FIXTURE_MOVIE_ID}`),
+    commandPalette.getByTestId(`search-result-movie-${FIXTURE_MOVIE_ID}`),
   ).toBeVisible();
   await controlField.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=Golden/);
   await expect(page.getByTestId("command-palette")).toHaveCount(0);
 
   await page.keyboard.press("Meta+k");
-  await expect(page.getByTestId("command-palette")).toBeVisible();
-  const reopenedField = page.getByTestId("command-search-field");
+  await expect(commandPalette).toBeVisible();
+  const reopenedField = commandPalette.getByTestId("command-search-field");
   await reopenedField.fill("Golden");
-  const firstPaletteSuggestion = page.getByTestId(
+  const firstPaletteSuggestion = commandPalette.getByTestId(
     `search-suggestion-movie-${FIXTURE_MOVIE_ID}`,
   );
   // The submitted Search page underneath the modal contains the same result
