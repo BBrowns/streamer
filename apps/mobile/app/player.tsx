@@ -63,6 +63,10 @@ import { ResumePrompt } from "../components/player/ResumePrompt";
 import { DesktopCastModal } from "../components/DesktopCastModal";
 import { goBackOrReplace } from "../lib/navigation";
 import {
+  getNativePointerEvents,
+  getPointerEventsStyle,
+} from "../lib/platformStyles";
+import {
   createPlaybackRuntimeError,
   mapPlaybackMessageToRuntimeFailure,
 } from "../services/playback/PlaybackErrors";
@@ -276,6 +280,8 @@ export default function PlayerScreen() {
   const [resolveAttempt, setResolveAttempt] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [controlsFocused, setControlsFocused] = useState(false);
+  const [accessibleControlsRequested, setAccessibleControlsRequested] =
+    useState(false);
   const [screenReaderEnabled, setScreenReaderEnabled] = useState(false);
   const [previewControls, setPreviewControls] = useState(false);
   const [fallbackStatusMessage, setFallbackStatusMessage] = useState<
@@ -308,7 +314,7 @@ export default function PlayerScreen() {
     isPlaying: isPlaying && !playerE2eEnabled,
     isScrubbing: runtimeViewState.kind === "scrubbing",
     settingsOpen,
-    hasControlFocus: controlsFocused,
+    hasControlFocus: controlsFocused || accessibleControlsRequested,
     screenReaderEnabled,
   });
   const controlsAutoHideDelay = getPlayerChromeAutoHideDelay(isCompact);
@@ -542,6 +548,21 @@ export default function PlayerScreen() {
     scheduleControlsHide();
   }, [scheduleControlsHide]);
 
+  const revealAccessibleControls = useCallback(() => {
+    setAccessibleControlsRequested(true);
+    showControls();
+    // Virtual-cursor activation need not focus a DOM control. Keep the chrome
+    // available, and give keyboard users a visible focus target after reveal.
+    requestAnimationFrame(() => {
+      if (typeof document === "undefined") return;
+      document
+        .querySelector<HTMLElement>(
+          '[data-testid="player-screen"] [data-testid="player-play-pause-button"]',
+        )
+        ?.focus();
+    });
+  }, [showControls]);
+
   useEffect(() => {
     if (!controlsAutoHideAllowed) {
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
@@ -553,16 +574,22 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     let mounted = true;
-    void AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
-      if (mounted) setScreenReaderEnabled(enabled);
-    });
-    const subscription = AccessibilityInfo.addEventListener(
-      "screenReaderChanged",
-      setScreenReaderEnabled,
-    );
+    let subscription:
+      ReturnType<typeof AccessibilityInfo.addEventListener> | undefined;
+    // React Native Web resolves this query to true for every browser, rather
+    // than detecting a screen reader. Web chrome stays open for keyboard focus.
+    if (Platform.OS !== "web") {
+      void AccessibilityInfo.isScreenReaderEnabled().then((enabled) => {
+        if (mounted) setScreenReaderEnabled(enabled);
+      });
+      subscription = AccessibilityInfo.addEventListener(
+        "screenReaderChanged",
+        setScreenReaderEnabled,
+      );
+    }
     return () => {
       mounted = false;
-      subscription.remove();
+      subscription?.remove();
       if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
     };
   }, []);
@@ -2380,7 +2407,27 @@ export default function PlayerScreen() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View testID="player-screen" style={styles.container}>
+      <View
+        testID="player-screen"
+        style={styles.container}
+        {...((Platform.OS === "web"
+          ? {
+              onPointerDown: () => {
+                setControlsFocused(false);
+                setAccessibleControlsRequested(false);
+              },
+              onPointerMove: (event: any) => {
+                if (
+                  event.pointerType === "mouse" ||
+                  event.pointerType === "pen"
+                ) {
+                  showControls();
+                }
+              },
+              onPointerLeave: scheduleControlsHide,
+            }
+          : {}) as any)}
+      >
         <StatusBar hidden />
         <View style={styles.videoContainer}>
           {activeCast ? (
@@ -2520,6 +2567,31 @@ export default function PlayerScreen() {
                 onControlFocusChange={setControlsFocused}
               />
             )}
+
+          {Platform.OS === "web" && !activeCast && playerChromeEnabled && (
+            <Pressable
+              testID="player-reveal-controls"
+              accessibilityRole="button"
+              accessibilityLabel={t("player.controls.showControls", {
+                defaultValue: "Show playback controls",
+              })}
+              focusable
+              tabIndex={0}
+              onFocus={revealAccessibleControls}
+              onPress={revealAccessibleControls}
+              style={[
+                {
+                  position: "absolute",
+                  width: 1,
+                  height: 1,
+                  overflow: "hidden",
+                  opacity: 0,
+                },
+                getPointerEventsStyle("none"),
+              ]}
+              pointerEvents={getNativePointerEvents("none")}
+            />
+          )}
 
           <PlayerControls
             player={controllerPlayer}

@@ -47,6 +47,55 @@ describe("PlayerControls", () => {
       volume: 0.8,
     }) as any;
 
+  it("holds chrome for keyboard focus and releases it for pointer input", async () => {
+    const originalPlatform = Platform.OS;
+    Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+    const onControlFocusChange = jest.fn();
+    try {
+      const screen = await renderControls(
+        <PlayerControls
+          player={createPlayer()}
+          currentTime={30}
+          duration={120}
+          isVisible
+          isPlaying
+          onPlayPause={jest.fn()}
+          onControlFocusChange={onControlFocusChange}
+        />,
+      );
+      const chrome = screen.getByTestId("player-controls-cinematic");
+      const currentTarget = { matches: () => false };
+      await fireEvent(chrome, "focus", {
+        currentTarget,
+        target: { matches: () => false },
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(false);
+      await fireEvent(chrome, "focus", {
+        currentTarget,
+        target: {
+          matches: (selector: string) => selector === ":focus-visible",
+        },
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(true);
+      await fireEvent(chrome, "pointerDown");
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(false);
+      await fireEvent(chrome, "keyDownCapture", {
+        target: { matches: () => true },
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(true);
+      await fireEvent(chrome, "blur", {
+        currentTarget: { contains: () => false },
+        relatedTarget: null,
+      });
+      expect(onControlFocusChange).toHaveBeenLastCalledWith(false);
+    } finally {
+      Object.defineProperty(Platform, "OS", {
+        configurable: true,
+        value: originalPlatform,
+      });
+    }
+  });
+
   it("does not render while hidden", async () => {
     const screen = await renderControls(
       <PlayerControls

@@ -7,6 +7,7 @@ import type { Stream } from "@streamer/shared";
 import { getWebFocusStyle } from "../ui/designSystem";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { isFocusVisibleEvent } from "../../hooks/useWebPressableActivation";
 import { playerChrome } from "./playerChrome";
 import {
   getNativePointerEvents,
@@ -50,8 +51,16 @@ export function PlayerOverlay({
       pointerEvents={getNativePointerEvents("box-none")}
       {...((Platform.OS === "web"
         ? {
-            onFocusCapture: () => onControlFocusChange?.(true),
-            onBlurCapture: (event: any) => {
+            onFocus: (event: any) =>
+              onControlFocusChange?.(
+                isFocusVisibleEvent({ target: event.target }),
+              ),
+            onKeyDownCapture: (event: any) =>
+              onControlFocusChange?.(
+                isFocusVisibleEvent({ target: event.target }),
+              ),
+            onPointerDown: () => onControlFocusChange?.(false),
+            onBlur: (event: any) => {
               if (!event.currentTarget?.contains?.(event.relatedTarget)) {
                 onControlFocusChange?.(false);
               }
