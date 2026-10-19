@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   TextInputProps,
+  type TextInputInstance,
   TextStyle,
   View,
   ViewStyle,
@@ -30,7 +31,7 @@ type SearchFieldProps = Omit<TextInputProps, "style"> & {
 };
 
 /** Shared search-input behavior for editorial and compact surface contexts. */
-export const SearchField = forwardRef<TextInput, SearchFieldProps>(
+export const SearchField = forwardRef<TextInputInstance, SearchFieldProps>(
   function SearchField(
     {
       value,

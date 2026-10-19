@@ -4,6 +4,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   View,
@@ -47,7 +48,7 @@ export function SearchSuggestions({
 }: SearchSuggestionsProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const {
     isKeyboardFocused: isShowAllFocused,
     webPressableProps: showAllProps,

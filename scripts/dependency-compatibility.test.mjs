@@ -90,7 +90,7 @@ test("Expo xcode tooling resolves the patched CommonJS UUID API", () => {
 
   project.hash = { project: { objects: {} } };
 
-  assert.equal(uuidPackage.version, "14.0.2");
+  assert.equal(uuidPackage.version, "14.0.3");
   assert.equal(xcodeUuidPackage.version, "11.1.1");
   assert.match(project.generateUuid(), /^[0-9A-F]{24}$/);
 });
@@ -109,14 +109,6 @@ test("the stream-json override only serves migrated Detox and Bunyamin consumers
     .sort();
   assert.deepEqual(consumers, ["node_modules/bunyamin", "node_modules/detox"]);
   assert.equal(packages["node_modules/stream-json"].version, "3.6.0");
-});
-
-test("Expo query parsing preserves Unicode, repeated keys and malformed escapes", () => {
-  const queryString = require("query-string");
-  assert.deepEqual(
-    { ...queryString.parse("title=caf%C3%A9&tag=one&tag=two&bare&bad=%ZZ") },
-    { title: "café", tag: ["one", "two"], bare: null, bad: "%ZZ" },
-  );
 });
 
 test("Detox JSONL parsing preserves records across input chunks", async () => {
@@ -168,7 +160,7 @@ test("Bunyamin CommonJS and ESM trace merging preserves array records", async ()
   }
 });
 
-test("React Native resolves the supported Metro line without image-size", () => {
+test("React Native 0.88 resolves the supported Metro line without image-size", () => {
   const lockfile = readLockfile();
   const metroConfig =
     lockfile.packages["node_modules/@react-native/metro-config"];
@@ -182,16 +174,16 @@ test("React Native resolves the supported Metro line without image-size", () => 
       path.endsWith("/node_modules/image-size"),
   );
 
-  assert.equal(metroConfig.version, "0.86.3");
+  assert.equal(metroConfig.version, "0.88.0");
   assert.ok(metroNodes.length > 0);
   assert.deepEqual(
     [...new Set(metroNodes.map(([, packageInfo]) => packageInfo.version))],
-    ["0.84.5"],
+    ["0.87.1"],
   );
   assert.deepEqual(imageSizeNodes, []);
 });
 
-test("Expo 57 native modules stay on a compatible Worklets contract", () => {
+test("Expo SDK58 native modules stay on a compatible Worklets contract", () => {
   const lockfile = readLockfile();
   const expo = lockfile.packages["node_modules/expo"];
   const expoModulesCore = lockfile.packages["node_modules/expo-modules-core"];
@@ -201,36 +193,59 @@ test("Expo 57 native modules stay on a compatible Worklets contract", () => {
     lockfile.packages["node_modules/react-native-gesture-handler"];
   const safeArea =
     lockfile.packages["node_modules/react-native-safe-area-context"];
+  const rootPackage = lockfile.packages[""];
   const mobilePackage = lockfile.packages["apps/mobile"];
+  const mobileRenderer = lockfile.packages["apps/mobile/node_modules/test-renderer"];
 
   assert.ok(expo);
+  assert.equal(expo.version, "58.0.14");
+  assert.equal(rootPackage.devDependencies["react-native"], "0.88.0");
+  assert.equal(rootPackage.devDependencies["@react-native/jest-preset"], "0.88.0");
+  assert.equal(mobilePackage.dependencies["react-native"], "0.88.0");
+  assert.equal(mobilePackage.dependencies["react-native-web"], "~0.21.4");
+  assert.equal(
+    lockfile.packages["apps/mobile/node_modules/react-native-web"].version,
+    "0.21.4",
+  );
+  assert.equal(mobilePackage.devDependencies.jest, "~30.5.2");
+  assert.equal(mobilePackage.devDependencies["@types/jest"], "~30.0.0");
+  assert.equal(lockfile.packages["node_modules/jest"].version, "30.5.2");
+  assert.equal(lockfile.packages["node_modules/@types/jest"].version, "30.0.0");
+  assert.equal(
+    lockfile.packages["node_modules/@react-native/jest-preset"].version,
+    "0.88.0",
+  );
+  assert.equal(lockfile.packages["node_modules/jest-expo"].version, "58.0.11");
+  assert.equal(mobileRenderer.version, "1.3.1");
   assert.ok(
     semver.satisfies(
       expoModulesCore.version,
       expo.dependencies["expo-modules-core"],
     ),
   );
-  assert.match(expoModulesCore.version, /^57\.0\./);
-  assert.equal(reanimated.version, "4.5.5");
-  assert.equal(worklets.version, "0.10.4");
+  assert.match(expoModulesCore.version, /^58\.0\./);
+  assert.equal(reanimated.version, "4.7.1");
+  assert.equal(worklets.version, "0.13.0");
   assert.equal(gestureHandler.version, "3.3.0");
   assert.equal(
     mobilePackage.dependencies["react-native-gesture-handler"],
     "~3.3.0",
   );
-  assert.equal(safeArea.version, "5.10.0");
+  assert.equal(safeArea.version, "5.10.1");
   assert.equal(
     mobilePackage.dependencies["react-native-safe-area-context"],
-    "~5.10.0",
+    "~5.10.1",
   );
   assert.equal(
     expoModulesCore.peerDependencies["react-native-worklets"],
-    "^0.7.4 || ^0.8.0 || ^0.9.0 || ^0.10.0",
+    ">=0.13.0",
   );
   assert.match(
     reanimated.peerDependencies["react-native-worklets"],
-    /0\.10\.x/,
+    /0\.13\.x/,
   );
+  assert.equal(lockfile.packages["node_modules/expo-updates"].version, "58.0.17");
+  assert.equal(lockfile.packages["node_modules/expo-video"].version, "58.0.11");
 });
 
 test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {

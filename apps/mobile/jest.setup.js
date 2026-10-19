@@ -1,5 +1,13 @@
 // Setup file
 
+// Vector icons use bundled font assets in the app, but unit tests do not need
+// to resolve native assets through Expo's asset registry.
+jest.mock("expo-font", () => ({
+  ...jest.requireActual("expo-font"),
+  isLoaded: jest.fn(() => true),
+  loadAsync: jest.fn(async () => {}),
+}));
+
 // Mock Expo Secure Store
 jest.mock("expo-secure-store", () => ({
   getItemAsync: jest.fn(),

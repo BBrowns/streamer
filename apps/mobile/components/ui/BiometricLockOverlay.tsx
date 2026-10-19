@@ -47,14 +47,14 @@ export function BiometricLockOverlay() {
 
     const sub = AppState.addEventListener("change", (next) => {
       if (
-        appState.current.match(/active/) &&
+        appState.current?.match(/active/) &&
         next.match(/inactive|background/)
       ) {
         // App is being backgrounded - record time
         setLastActive(Date.now());
       }
 
-      if (appState.current.match(/inactive|background/) && next === "active") {
+      if (appState.current?.match(/inactive|background/) && next === "active") {
         // App is being foregrounded - check if timeout exceeded
         checkLock();
       }

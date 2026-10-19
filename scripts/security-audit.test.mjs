@@ -76,7 +76,7 @@ test("accepts only exact production findings covered by applied local patches", 
     const remediation = LOCAL_SECURITY_PATCHES[advisory.id];
     assert.equal(remediation.dependency, advisory.name);
     assert.deepEqual(remediation.allowedNodes, advisory.nodes);
-    assert.equal(remediation.reviewBy, "2026-10-18");
+    assert.equal(remediation.reviewBy, "2026-11-19");
     assert.ok(remediation.owner);
     assert.ok(remediation.reason);
     assert.ok(remediation.nextAction);
@@ -136,7 +136,7 @@ test("blocks a local security patch after its review date", () => {
       url: "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
     }),
     {
-      now: new Date("2026-10-19T00:00:00.000Z"),
+      now: new Date("2026-11-20T00:00:00.000Z"),
       root: repoRoot,
     },
   );

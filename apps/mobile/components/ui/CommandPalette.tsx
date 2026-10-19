@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -30,7 +31,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
   const scale = useRef(new Animated.Value(0.98)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const router = useRouter();
