@@ -5,7 +5,9 @@ risk. More retries and more queues do not automatically improve reliability.
 
 ## Minimum Contract
 
-- Every deadline has an owner and a cancellation path.
+- Every deadline has an owner and a cancellation path for cancellable work.
+  Irreversible external work has an explicit reconciliation or compensation
+  outcome after local waiting ends.
 - Every retry has an eligibility rule, limit, delay policy, and budget.
 - Every side effect has an idempotency or duplicate-handling strategy.
 - Every queue or concurrent operation has a bound and backpressure behavior.

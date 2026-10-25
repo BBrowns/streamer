@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency Change"
+  short_description: "Change dependencies with compatibility evidence"
+  default_prompt: "Use $dependency-change to update this dependency and verify compatibility."
