@@ -2,11 +2,14 @@
 
 > For agentic workers: use superpowers:executing-plans when implementation is approved. Implement one task at a time and keep the platform adapters independently reversible.
 
+**Status:** Historical proposal from 2026-09-30, not an implementation receipt.
+Current dependency and runtime versions are authoritative in the package manifests.
+
 **Goal:** Give iOS, Android, and macOS/Electron interfaces that feel at home on their platform while keeping Streamer’s routes, data, and actions consistent.
 
 **Architecture:** Keep one Expo application and its existing routes, stores, services, and playback/download owners. Move platform differences into shell and screen presentation modules selected by React Native/Expo platform resolution; shared controllers pass stable screen data and callbacks into those views. Continue using window classes inside each platform so iPad, Android tablets, resized Electron windows, and browser layouts adapt to available space.
 
-**Tech Stack:** Expo SDK 57.0.18, Expo Router 57.0.17, React Native, React Native Web, Electron 44.3.0, Jest/React Native Testing Library, Playwright, Detox when simulators are available.
+**Tech Stack at proposal date:** Expo SDK 57.0.18, Expo Router 57.0.17, React Native, React Native Web, Electron 44.3.0, Jest/React Native Testing Library, Playwright, Detox when simulators are available.
 
 **Spec:** This plan’s “Decision and acceptance criteria” plus the existing UI contract in UI.md. The UI contract is updated in Task 1 to record the platform-specific presentation boundary.
 
