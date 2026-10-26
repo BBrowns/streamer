@@ -15,6 +15,7 @@ import {
   parseFfprobeTrackCatalog,
   probeMediaDurationAtUrl,
   probeMediaTracksAtUrl,
+  probeRandomSeekAtUrl,
 } from "../media-probe.js";
 
 const MAX_PENDING_PROBES_FOR_TEST = 16;
@@ -110,6 +111,43 @@ describe("media probe queue reliability", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+
+  it.each([
+    {
+      operation: "Media duration probe",
+      invoke: () =>
+        probeMediaDurationAtUrl({
+          streamUrl: "http://fixture/invalid-duration",
+        }),
+    },
+    {
+      operation: "Random seek probe",
+      invoke: () =>
+        probeRandomSeekAtUrl({
+          streamUrl: "http://fixture/invalid-seek",
+          targetSeconds: 120,
+        }),
+    },
+  ])(
+    "rejects invalid JSON from $operation without hanging",
+    async ({ operation, invoke }) => {
+      const onRejected = vi.fn();
+      const result = invoke().catch(onRejected);
+      await letProbeStartsRun();
+      const child = spawnProbe.mock.results[0].value as ReturnType<
+        typeof createPausedProbeChild
+      >;
+
+      child.stdout.emit("data", Buffer.from("{invalid"));
+      child.emit("close", 0);
+      await letProbeStartsRun();
+
+      expect(onRejected).toHaveBeenCalledWith(
+        new Error(`${operation} returned invalid data`),
+      );
+      await result;
+    },
+  );
 
   it("rejects probe requests when the bounded wait queue is full", async () => {
     const activeControllers = [new AbortController(), new AbortController()];
