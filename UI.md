@@ -100,6 +100,11 @@ Primary hierarchy:
 
 In practice, most components use `StyleSheet.create` with inline `colors.xxx` references, not Tailwind classes. NativeWind is present (`global.css`, `tailwind.config.js`, `nativewind-env.d.ts`) but is the minority pattern. New components should default to `StyleSheet.create` + `useTheme`.
 
+For candidate-bound subjective visual review, use the compact
+[Streamer visual contract](./design/streamer-visual-contract.md). `UI.md`
+remains the implementation and token authority; Gauntlet binds a review to the
+exact bytes of both files.
+
 Tamagui is not currently a committed full-app migration. If introduced, treat
 it as a pilot for constrained primitives such as buttons, surfaces, sheets,
 status pills, and settings panels before replacing large screens.
@@ -816,6 +821,13 @@ Important visible states:
 | `failed_timeout`            | Gateway or video startup timed out.                                                         |
 
 `PlayerStatusOverlay` uses these states for titles, retry visibility, and Sources & Devices guidance. Keep future player work in this typed model rather than adding raw alert strings.
+
+When a saved Resume position cannot be confirmed, keep the existing Resume /
+Start Over choice available at the attempted position. Do not silently dismiss
+the choice or start playback at an unconfirmed position. Start Over must confirm
+zero before playback; a failed reset preserves the original Resume choice.
+Cancellation, source
+replacement and a stale attempt must not reopen the choice or resume playback.
 
 Advanced source selection opened from Player stays in an adaptive overlay over
 the Player. Its Close button, Escape key on web, and native modal back request
