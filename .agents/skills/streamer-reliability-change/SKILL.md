@@ -5,19 +5,22 @@ description: Use when changing behavior across independently failing boundaries,
 
 # Streamer Reliability Change
 
-Give every relevant failure a bounded outcome, recovery path, and observable signal.
+Read the [portable reliability-change core](../../skill-library/reliability-change/SKILL.md)
+and apply these Streamer constraints in the same workflow. Reuse the current
+task plan and project verification evidence.
 
-## Workflow
+## Project constraints
 
-1. Name the boundary owner, dependency, user-visible operation, steady state, and concrete failure modes.
-2. Specify deadline ownership and cancellation propagation. A timeout without downstream cancellation is incomplete.
-3. Define retry eligibility, limit, delay, budget, and idempotency. Ensure only one layer owns retries.
-4. Bound queues and concurrency; state backpressure and duplicate, reordered, or delayed delivery behavior.
-5. Define partial-success persistence, process restart, cleanup, degraded UX, and recovery after the dependency returns.
-6. Add only the logs, metrics, traces, or breadcrumbs needed for an operator decision; keep dimensions bounded and preserve redaction contracts.
-7. Test failures deterministically: timeout, cancellation at material phases, duplicate delivery, restart, dependency loss, recovery, and leaked-work prevention.
-
-Read [references/reliability.md](references/reliability.md) for the failure contract. Read [references/telemetry.md](references/telemetry.md) only when production signals or SLOs change.
+- Read `ARCHITECTURE.md` and `PLAYBACK.md` for the affected state owner,
+  session, stream and restart contracts.
+- Preserve platform ownership: Electron owns its desktop bridge sidecar; the
+  API bridge supervisor is opt-in. Keep recovery and cancellation at the owning
+  service boundary.
+- Never persist or log resolved media URLs, magnets, info hashes, raw `Stream`
+  objects or bridge URLs. Operational dimensions must remain bounded.
+- Use `scripts/dev-runtime.cjs` for native bridge execution and the focused
+  bridge/runtime checks selected by `streamer-verification`. Keep untested
+  real-device playback, casting and download behavior explicit.
 
 ## Boundaries
 
@@ -25,4 +28,5 @@ Use `streamer-contract-change` when the wire or persisted shape changes. Use `st
 
 ## Completion
 
-Report failure states, timeout/retry/cancellation ownership, persistence and recovery behavior, degraded UX, fault tests, operational signals, and residual untested platform risk.
+Use the core's failure/recovery report, with Streamer owner boundaries, exact
+workspace/bridge checks run and any untested device evidence.

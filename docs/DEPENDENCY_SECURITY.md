@@ -319,6 +319,28 @@ direct `@electron/notarize` `3.1.1`; electron-builder may retain its own nested
 notarize 2.x contract. Keep these package paths as explicit compatibility
 boundaries rather than forcing global overrides.
 
+## PR-readiness security follow-up — 2026-10-25
+
+The root Zod override now requires `^4.6.7`, matching the shared and server
+consumer floor instead of allowing the lockfile to retain vulnerable 4.6.5.
+The focused remediation suite verifies that oversized arrays, sets and maps
+are rejected before their element validators run, while bounded inputs still
+parse normally. The compatible body-parser resolution advances from 2.3.0
+to 2.4.0. Its Node 18 minimum remains below the repository runtime; no framework,
+native package, install-script permission or audit exception changes here.
+
+The current master already resolves follow-redirects 1.16.1 and the Sentry CLI's
+undici 6.29.1. Existing, verified node-forge patch ownership and its review date
+remain authoritative; a passing policy audit does not mean the unpatched npm
+tarball is free of findings. Owner: platform maintainers. Revisit the Zod
+override when all consuming ranges enforce the fixed floor; keep production
+audit, shared schema tests and dependency compatibility checks as the gates.
+
+Sources: [body-parser advisory](https://github.com/advisories/GHSA-27r3-jxmh-p828),
+[Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5),
+[Zod 4.6.7 release](https://github.com/colinhacks/zod/releases/tag/v4.6.7),
+[undici 6.29.1 release](https://github.com/nodejs/undici/releases/tag/v6.29.1).
+
 ## Upgrade Routine
 
 1. Switch to the pinned Node/npm versions.

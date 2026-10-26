@@ -5,23 +5,17 @@ description: Use when adding, removing, upgrading, pinning, overriding, or patch
 
 # Streamer Dependency Change
 
-Change the dependency graph without creating toolchain, native, security, or compatibility drift.
+Read the [portable core](../../skill-library/dependency-change/SKILL.md) and apply this overlay with it as one workflow. Existing task authorization carries through both.
 
-## Workflow
+## Project Constraints
 
-1. Read the installed version, target release notes and migration guide through the configured API-doc tools. Do not rely on remembered APIs.
-2. Establish why the change is needed and the smallest compatible target. Check Node/npm, Expo/React Native, Electron, native architecture, peer dependencies, and supported platforms.
-3. Update manifest and lockfile together. Inspect transitive, override, patch, lifecycle-script, permission, and generated-native changes.
-4. Use the repository runtime wrappers; do not bypass `scripts/dev-runtime.cjs` for native bridge work.
-5. Run install-script policy, dependency compatibility, production audit, affected package tests/typechecks, and relevant native/Electron smoke checks.
-6. Document a security exception only when no safe compatible remediation exists; include exact scope, owner, mitigation, review deadline, and removal condition.
+- Use Context Hub first for curated API references; otherwise use Context7 with the exact library version. Read release notes and migrations before choosing the target.
+- Preserve the repository's Node/npm requirements, Expo/React Native, Electron, native architecture, peer dependencies, and supported platforms. Read [dependency security policy](../../../docs/DEPENDENCY_SECURITY.md).
+- Use repository installation/runtime scripts; never bypass `scripts/dev-runtime.cjs` for native bridge work. Preserve Electron ownership of its bridge sidecar and opt-in API supervision.
+- Run `npm run security:install-scripts`, `npm run dependency:compatibility:test`, `npm run security:audit`, affected workspace tests/typechecks, and applicable native/Electron smoke checks. Use `streamer-verification` for mapped evidence; do not claim unrun device validation.
+- Keep install approvals version-pinned. Security exceptions require exact scope, owner, mitigation, review deadline, and removal condition. Keep production and development findings distinct.
+- Never persist or log resolved media URLs, magnets, info hashes, raw `Stream` objects, or bridge URLs.
 
-Read [references/dependencies.md](references/dependencies.md) for native upgrades, major versions, overrides, patches, or exceptions.
+## Project Routing
 
-## Boundaries
-
-Use `streamer-security-boundaries` only for new permissions, executable/install behavior, untrusted network reach, or a material trust change. Use `streamer-contract-change` when released APIs or serialized shapes change. Avoid unrelated lockfile churn.
-
-## Completion
-
-Report old and new versions, compatibility evidence, manifest/lockfile/patch changes, policy and audit results, focused runtime checks, skipped device evidence, and rollback or exception expiry.
+Use `streamer-security-boundaries` for new permissions, executable/install behavior, untrusted network reach, or material trust changes; `streamer-contract-change` for released APIs or serialized shapes. Avoid unrelated lockfile churn. Report the core's completion evidence with project command results and skipped device evidence.

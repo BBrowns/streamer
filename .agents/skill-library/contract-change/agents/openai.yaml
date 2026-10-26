@@ -1,0 +1,4 @@
+interface:
+  display_name: "Contract Change"
+  short_description: "Evolve durable contracts with safe compatibility"
+  default_prompt: "Use $contract-change to evolve this contract with compatible consumers, persisted data, and a bounded migration."

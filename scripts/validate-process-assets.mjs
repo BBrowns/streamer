@@ -1,6 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { validateSkillEvals } from "./validate-skill-evals.mjs";
@@ -15,6 +21,13 @@ export const EXPECTED_REPOSITORY_SKILLS = Object.freeze([
   "streamer-security-boundaries",
   "streamer-ui-change",
   "streamer-verification",
+]);
+
+const EXPECTED_PORTABLE_SKILLS = Object.freeze([
+  "contract-change",
+  "dependency-change",
+  "incident-response",
+  "reliability-change",
 ]);
 
 const HANDOFF_REQUIRED_SECTIONS = Object.freeze([
@@ -146,19 +159,41 @@ export function findStaleProcessReferences(root = process.cwd()) {
   return errors;
 }
 
-function validateLocalMarkdownLinks(source, directory, label) {
+function isOutsideDirectory(directory, target) {
+  const path = relative(directory, target);
+  return path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
+}
+
+function validateLocalMarkdownLinks(source, directory, label, resourceRoot) {
   const errors = [];
   for (const match of source.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
     const target = match[1].split("#", 1)[0];
     if (!target || /^(?:https?:|mailto:)/.test(target)) continue;
-    if (!existsSync(join(directory, target))) {
+    const targetPath = resolve(directory, target);
+    if (
+      resourceRoot &&
+      (isOutsideDirectory(resolve(resourceRoot), targetPath) ||
+        (existsSync(targetPath) &&
+          isOutsideDirectory(
+            realpathSync(resourceRoot),
+            realpathSync(targetPath),
+          )))
+    ) {
+      errors.push(
+        `${label}: linked resource escapes skill directory ${target}`,
+      );
+    } else if (!existsSync(targetPath)) {
       errors.push(`${label}: missing linked resource ${target}`);
     }
   }
   return errors;
 }
 
-export function validateMarkdownTreeLinks(directory, label) {
+export function validateMarkdownTreeLinks(
+  directory,
+  label,
+  { resourceRoot = null } = {},
+) {
   const errors = [];
   const stack = [directory];
   while (stack.length > 0) {
@@ -172,6 +207,7 @@ export function validateMarkdownTreeLinks(directory, label) {
             readFileSync(path, "utf8"),
             dirname(path),
             `${label}/${relative(directory, path)}`,
+            resourceRoot,
           ),
         );
       }
@@ -384,7 +420,53 @@ export function validateRuntimePolicy(root = process.cwd()) {
   return errors;
 }
 
-export function validateSkillArchitecture(root = process.cwd()) {
+function validateSkillDirectory(directory, skill, { portable = false } = {}) {
+  const errors = [];
+  const skillFile = join(directory, "SKILL.md");
+  const metadataFile = join(directory, "agents", "openai.yaml");
+  if (!existsSync(skillFile)) return [`${skill}: missing SKILL.md`];
+
+  const source = readFileSync(skillFile, "utf8");
+  const metadata = readFrontmatter(source);
+  const lineCount = source.split(/\r?\n/).length;
+  const wordCount = source.trim().split(/\s+/).length;
+  if (!metadata?.name || metadata.name !== skill) {
+    errors.push(`${skill}: frontmatter name must match directory`);
+  }
+  if (!metadata?.description || metadata.description.includes("TODO")) {
+    errors.push(`${skill}: missing useful description`);
+  }
+  if (lineCount > 500 || wordCount > 800) {
+    errors.push(
+      `${skill}: SKILL.md exceeds the 500-line/800-word context budget (${lineCount} lines, ${wordCount} words)`,
+    );
+  }
+  if (source.includes("[TODO:")) {
+    errors.push(`${skill}: contains template TODO`);
+  }
+  errors.push(
+    ...validateMarkdownTreeLinks(directory, skill, {
+      resourceRoot: portable ? directory : null,
+    }),
+  );
+  if (!existsSync(metadataFile)) {
+    errors.push(`${skill}: missing agents/openai.yaml`);
+  } else {
+    const metadataSource = readFileSync(metadataFile, "utf8");
+    if (!metadataSource.includes("interface:")) {
+      errors.push(`${skill}: missing interface metadata`);
+    }
+    if (!metadataSource.includes(`$${skill}`)) {
+      errors.push(`${skill}: default_prompt must mention $${skill}`);
+    }
+  }
+  return errors;
+}
+
+export function validateSkillArchitecture(
+  root = process.cwd(),
+  { requirePortableSkills = false } = {},
+) {
   const errors = [];
   const skillRoot = join(root, ".agents", "skills");
   if (!existsSync(skillRoot)) return ["missing .agents/skills"];
@@ -405,42 +487,19 @@ export function validateSkillArchitecture(root = process.cwd()) {
   }
 
   for (const skill of actual) {
-    const directory = join(skillRoot, skill);
-    const skillFile = join(directory, "SKILL.md");
-    const metadataFile = join(directory, "agents", "openai.yaml");
-    if (!existsSync(skillFile)) {
-      errors.push(`${skill}: missing SKILL.md`);
-      continue;
-    }
-    const source = readFileSync(skillFile, "utf8");
-    const metadata = readFrontmatter(source);
-    const lineCount = source.split(/\r?\n/).length;
-    const wordCount = source.trim().split(/\s+/).length;
-    if (!metadata?.name || metadata.name !== skill) {
-      errors.push(`${skill}: frontmatter name must match directory`);
-    }
-    if (!metadata?.description || metadata.description.includes("TODO")) {
-      errors.push(`${skill}: missing useful description`);
-    }
-    if (lineCount > 500 || wordCount > 800) {
+    errors.push(...validateSkillDirectory(join(skillRoot, skill), skill));
+  }
+
+  const portableRoot = join(root, ".agents", "skill-library");
+  if (!existsSync(portableRoot)) {
+    if (requirePortableSkills) errors.push("missing .agents/skill-library");
+  } else {
+    for (const skill of EXPECTED_PORTABLE_SKILLS) {
       errors.push(
-        `${skill}: SKILL.md exceeds the 500-line/800-word context budget (${lineCount} lines, ${wordCount} words)`,
+        ...validateSkillDirectory(join(portableRoot, skill), skill, {
+          portable: true,
+        }),
       );
-    }
-    if (source.includes("[TODO:")) {
-      errors.push(`${skill}: contains template TODO`);
-    }
-    errors.push(...validateMarkdownTreeLinks(directory, skill));
-    if (!existsSync(metadataFile)) {
-      errors.push(`${skill}: missing agents/openai.yaml`);
-    } else {
-      const metadataSource = readFileSync(metadataFile, "utf8");
-      if (!metadataSource.includes("interface:")) {
-        errors.push(`${skill}: missing interface metadata`);
-      }
-      if (!metadataSource.includes(`$${skill}`)) {
-        errors.push(`${skill}: default_prompt must mention $${skill}`);
-      }
     }
   }
 
@@ -469,7 +528,9 @@ export function validateProcessAssets(root = process.cwd()) {
   const errors = [];
   const skillRoot = join(root, ".agents", "skills");
   if (!existsSync(skillRoot)) errors.push("missing .agents/skills");
-  errors.push(...validateSkillArchitecture(root));
+  errors.push(
+    ...validateSkillArchitecture(root, { requirePortableSkills: true }),
+  );
   errors.push(...validateSkillEvals(root, EXPECTED_REPOSITORY_SKILLS));
 
   const hookFile = join(root, ".codex", "hooks.json");

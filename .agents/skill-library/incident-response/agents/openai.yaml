@@ -1,0 +1,4 @@
+interface:
+  display_name: "Incident Response"
+  short_description: "Diagnose incidents and verify authorized recovery"
+  default_prompt: "Use $incident-response to diagnose this incident and identify recovery options."

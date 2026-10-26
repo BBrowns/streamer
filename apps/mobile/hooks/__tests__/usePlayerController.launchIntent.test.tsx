@@ -112,6 +112,16 @@ function createMockPlayer() {
   return player;
 }
 
+function deferredSeek() {
+  let resolve!: (position: number) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<number>((resolveSeek, rejectSeek) => {
+    resolve = resolveSeek;
+    reject = rejectSeek;
+  });
+  return { promise, resolve, reject };
+}
+
 function startSession(
   intent: { type: "play" } | { type: "resume"; positionSeconds: number },
   mediaOverrides: { background?: string } = {},
@@ -240,15 +250,16 @@ describe("usePlayerController playback launch intent", () => {
 
   it("waits for the resolved source ready event before consuming Resume", async () => {
     const player = createMockPlayer();
+    const commitSeek = jest.fn(async (position: number) => {
+      player.currentTime = position;
+      return position;
+    });
     startSession({ type: "resume", positionSeconds: 93 });
     const screen = await renderHook(
       ({ playbackUri }: { playbackUri: string | null }) =>
         usePlayerController({
           player,
-          commitSeek: async (position) => {
-            player.currentTime = position;
-            return position;
-          },
+          commitSeek,
           playbackUri,
           onClose: jest.fn(),
           showControls: jest.fn(),
@@ -281,6 +292,420 @@ describe("usePlayerController playback launch intent", () => {
     expect(screen.result.current.showResumePrompt).toBe(false);
     await screen.unmount();
   });
+
+  it.each([undefined, 41])(
+    "restores the explicit Resume position after rejection with saved progress %s",
+    async (savedPosition) => {
+      if (savedPosition !== undefined) {
+        mockContinueWatchingItems = [
+          {
+            itemId: "tt-launch",
+            type: "movie",
+            currentTime: savedPosition,
+            duration: 300,
+          },
+        ];
+      }
+      const player = createMockPlayer();
+      player.status = "readyToPlay";
+      player.duration = 300;
+      const commitSeek = jest
+        .fn()
+        .mockRejectedValueOnce(new Error("Outside the seekable media range."))
+        .mockResolvedValueOnce(92.5);
+      startSession({ type: "resume", positionSeconds: 93 });
+
+      const screen = await renderHook(() =>
+        usePlayerController({
+          player,
+          commitSeek,
+          playbackUri: "https://cdn.example.test/windowed.m3u8",
+          onClose: jest.fn(),
+          showControls: jest.fn(),
+        }),
+      );
+
+      await waitFor(() => {
+        expect(screen.result.current.showResumePrompt).toBe(true);
+      });
+      expect(screen.result.current.resumePromptTimeSeconds).toBe(93);
+      expect(usePlayerStore.getState().playbackLaunchIntent).toBeNull();
+      expect(player.play).not.toHaveBeenCalled();
+      expect(mockUpdateProgress).not.toHaveBeenCalled();
+
+      await act(() => screen.result.current.handleResumeResponse(true));
+
+      await waitFor(() => expect(player.play).toHaveBeenCalledTimes(1));
+      expect(commitSeek).toHaveBeenNthCalledWith(
+        2,
+        93,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(screen.result.current.showResumePrompt).toBe(false);
+      await act(() => screen.result.current.reportProgress(true));
+      expect(mockUpdateProgress).toHaveBeenCalledWith(
+        expect.objectContaining({ currentTime: 92.5 }),
+      );
+      await screen.unmount();
+    },
+  );
+
+  it("confirms Start Over before playing after a failed Resume moved the native clock", async () => {
+    mockContinueWatchingItems = [
+      {
+        itemId: "tt-launch",
+        type: "movie",
+        currentTime: 93,
+        duration: 300,
+      },
+    ];
+    const player = createMockPlayer();
+    player.status = "readyToPlay";
+    player.duration = 300;
+    player.playing = true;
+    const restart = deferredSeek();
+    const commitSeek = jest
+      .fn()
+      .mockImplementationOnce(async (position: number) => {
+        player.currentTime = position;
+        throw new Error("Timed out confirming the seek target.");
+      })
+      .mockImplementationOnce((position: number) => {
+        player.currentTime = position;
+        return restart.promise;
+      });
+    startSession({ type: "play" });
+    usePlayerStore.getState().consumePlaybackLaunchIntent();
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        commitSeek,
+        playbackUri: "https://cdn.example.test/windowed.m3u8",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    expect(screen.result.current.showResumePrompt).toBe(true);
+    expect(player.pause).toHaveBeenCalledTimes(1);
+    await act(() => screen.result.current.handleResumeResponse(true));
+
+    await waitFor(() => {
+      expect(screen.result.current.showResumePrompt).toBe(true);
+    });
+    expect(screen.result.current.resumePromptTimeSeconds).toBe(93);
+    expect(player.currentTime).toBe(93);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(mockUpdateProgress).not.toHaveBeenCalled();
+
+    await act(() => screen.result.current.handleResumeResponse(false));
+
+    expect(screen.result.current.showResumePrompt).toBe(false);
+    expect(commitSeek).toHaveBeenNthCalledWith(
+      2,
+      0,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(player.play).not.toHaveBeenCalled();
+    await act(() => screen.result.current.reportProgress(true));
+    expect(mockUpdateProgress).not.toHaveBeenCalled();
+
+    await act(() => {
+      player.currentTime = 0.25;
+      restart.resolve(0.25);
+    });
+
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(player.currentTime).toBe(0.25);
+    await act(() => screen.result.current.reportProgress(true));
+    expect(mockUpdateProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ currentTime: 0.25 }),
+    );
+    expect(commitSeek).toHaveBeenCalledTimes(2);
+    await screen.unmount();
+  });
+
+  it("preserves the original Resume choice when Start Over cannot confirm zero", async () => {
+    const player = createMockPlayer();
+    player.status = "readyToPlay";
+    player.duration = 300;
+    const commitSeek = jest
+      .fn()
+      .mockImplementationOnce(async (position: number) => {
+        player.currentTime = position;
+        throw new Error("Timed out confirming Resume.");
+      })
+      .mockRejectedValueOnce(new Error("Timed out confirming zero."))
+      .mockResolvedValueOnce(92.75);
+    startSession({ type: "resume", positionSeconds: 93 });
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        commitSeek,
+        playbackUri: "https://cdn.example.test/resolved.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+    expect(screen.result.current.showResumePrompt).toBe(true);
+
+    await act(() => screen.result.current.handleResumeResponse(false));
+
+    await waitFor(() => {
+      expect(screen.result.current.showResumePrompt).toBe(true);
+    });
+    expect(screen.result.current.resumePromptTimeSeconds).toBe(93);
+    expect(player.play).not.toHaveBeenCalled();
+    expect(mockUpdateProgress).not.toHaveBeenCalled();
+    expect(commitSeek).toHaveBeenNthCalledWith(
+      2,
+      0,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    await act(() => screen.result.current.handleResumeResponse(true));
+
+    expect(commitSeek).toHaveBeenNthCalledWith(
+      3,
+      93,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(player.play).toHaveBeenCalledTimes(1);
+    await act(() => screen.result.current.reportProgress(true));
+    expect(mockUpdateProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ currentTime: 92.75 }),
+    );
+    await screen.unmount();
+  });
+
+  it("confirms a normal Start Over at zero before playing", async () => {
+    mockContinueWatchingItems = [
+      {
+        itemId: "tt-launch",
+        type: "movie",
+        currentTime: 93,
+        duration: 300,
+      },
+    ];
+    const player = createMockPlayer();
+    player.status = "readyToPlay";
+    const commitSeek = jest.fn().mockResolvedValue(0);
+    startSession({ type: "play" });
+    usePlayerStore.getState().consumePlaybackLaunchIntent();
+    const screen = await renderHook(() =>
+      usePlayerController({
+        player,
+        commitSeek,
+        playbackUri: "https://cdn.example.test/resolved.mp4",
+        onClose: jest.fn(),
+        showControls: jest.fn(),
+      }),
+    );
+
+    await act(() => screen.result.current.handleResumeResponse(false));
+
+    expect(commitSeek).toHaveBeenCalledWith(
+      0,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(commitSeek).toHaveBeenCalledTimes(1);
+    expect(player.play).toHaveBeenCalledTimes(1);
+    expect(screen.result.current.showResumePrompt).toBe(false);
+    await screen.unmount();
+  });
+
+  it.each([
+    ["AbortError", "reject"],
+    ["SeekSupersededError", "reject"],
+    ["source URI", "resolve"],
+    ["source URI", "reject"],
+    ["source replacement", "resolve"],
+    ["source replacement", "reject"],
+    ["attempt", "resolve"],
+    ["attempt", "reject"],
+    ["session", "resolve"],
+    ["session", "reject"],
+    ["unmount", "resolve"],
+    ["unmount", "reject"],
+  ] as const)(
+    "keeps Start Over inert after %s despite late %s",
+    async (invalidation, outcome) => {
+      mockContinueWatchingItems = [
+        {
+          itemId: "tt-launch",
+          type: "movie",
+          currentTime: 93,
+          duration: 300,
+        },
+      ];
+      const player = createMockPlayer();
+      player.status = "readyToPlay";
+      const seek = deferredSeek();
+      const commitSeek = jest.fn(
+        (_position: number, _options?: { signal?: AbortSignal }) =>
+          seek.promise,
+      );
+      startSession({ type: "play" });
+      usePlayerStore.getState().consumePlaybackLaunchIntent();
+      const screen = await renderHook(
+        ({ playbackUri }: { playbackUri: string }) =>
+          usePlayerController({
+            player,
+            commitSeek,
+            playbackUri,
+            onClose: jest.fn(),
+            showControls: jest.fn(),
+          }),
+        {
+          initialProps: {
+            playbackUri: "https://cdn.example.test/resolved.mp4",
+          },
+        },
+      );
+      await act(() => screen.result.current.handleResumeResponse(false));
+      expect(commitSeek).toHaveBeenCalledWith(
+        0,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+
+      if (invalidation === "source URI") {
+        await screen.rerender({
+          playbackUri: "https://cdn.example.test/replacement.mp4",
+        });
+      } else if (invalidation === "source replacement") {
+        await act(() => screen.result.current.beginProgressSourceReplacement());
+      } else if (invalidation === "attempt") {
+        await act(() => {
+          usePlayerStore.setState({ playbackAttemptId: "attempt-next" });
+        });
+      } else if (invalidation === "session") {
+        await act(() => {
+          usePlayerStore.setState({ playbackSessionId: "session-next" });
+        });
+      } else if (invalidation === "unmount") {
+        await screen.unmount();
+      }
+      if (
+        invalidation !== "AbortError" &&
+        invalidation !== "SeekSupersededError"
+      ) {
+        expect(commitSeek.mock.calls[0][1]?.signal?.aborted).toBe(true);
+      }
+
+      await act(() => {
+        if (outcome === "resolve") seek.resolve(0.25);
+        else {
+          const error = new Error("The old zero seek did not complete.");
+          error.name = invalidation;
+          seek.reject(error);
+        }
+      });
+
+      expect(player.play).not.toHaveBeenCalled();
+      expect(mockUpdateProgress).not.toHaveBeenCalled();
+      if (invalidation !== "unmount") {
+        expect(screen.result.current.showResumePrompt).toBe(false);
+        await act(() => screen.result.current.reportProgress(true));
+        expect(mockUpdateProgress).not.toHaveBeenCalled();
+        await screen.unmount();
+      }
+    },
+  );
+
+  it.each(["AbortError", "SeekSupersededError"])(
+    "keeps a Resume %s inert",
+    async (name) => {
+      const player = createMockPlayer();
+      player.status = "readyToPlay";
+      const error = new Error("The seek is no longer active.");
+      error.name = name;
+      const commitSeek = jest.fn().mockRejectedValue(error);
+      startSession({ type: "resume", positionSeconds: 93 });
+      const screen = await renderHook(() =>
+        usePlayerController({
+          player,
+          commitSeek,
+          playbackUri: "https://cdn.example.test/windowed.m3u8",
+          onClose: jest.fn(),
+          showControls: jest.fn(),
+        }),
+      );
+
+      expect(commitSeek).toHaveBeenCalledTimes(1);
+      expect(screen.result.current.showResumePrompt).toBe(false);
+      expect(player.play).not.toHaveBeenCalled();
+      expect(mockUpdateProgress).not.toHaveBeenCalled();
+      await screen.unmount();
+    },
+  );
+
+  it.each([
+    ["source URI", "resolve"],
+    ["source URI", "reject"],
+    ["source replacement", "resolve"],
+    ["source replacement", "reject"],
+    ["attempt", "resolve"],
+    ["attempt", "reject"],
+    ["unmount", "resolve"],
+    ["unmount", "reject"],
+  ] as const)(
+    "keeps Resume inert after %s despite late %s",
+    async (invalidation, outcome) => {
+      const player = createMockPlayer();
+      player.status = "readyToPlay";
+      const seek = deferredSeek();
+      const commitSeek = jest.fn(
+        (_position: number, _options?: { signal?: AbortSignal }) =>
+          seek.promise,
+      );
+      startSession({ type: "resume", positionSeconds: 93 });
+      const screen = await renderHook(
+        ({ playbackUri }: { playbackUri: string }) =>
+          usePlayerController({
+            player,
+            commitSeek,
+            playbackUri,
+            onClose: jest.fn(),
+            showControls: jest.fn(),
+          }),
+        {
+          initialProps: {
+            playbackUri: "https://cdn.example.test/windowed.m3u8",
+          },
+        },
+      );
+      expect(commitSeek).toHaveBeenCalledTimes(1);
+
+      if (invalidation === "source URI") {
+        await screen.rerender({
+          playbackUri: "https://cdn.example.test/replacement.m3u8",
+        });
+      } else if (invalidation === "source replacement") {
+        await act(() => screen.result.current.beginProgressSourceReplacement());
+      } else if (invalidation === "attempt") {
+        await act(() => {
+          usePlayerStore.setState({ playbackAttemptId: "attempt-next" });
+        });
+      } else {
+        await screen.unmount();
+      }
+      expect(commitSeek.mock.calls[0][1]?.signal?.aborted).toBe(true);
+
+      await act(() => {
+        if (outcome === "resolve") seek.resolve(93);
+        else seek.reject(new Error("The old seek did not complete."));
+      });
+
+      expect(player.play).not.toHaveBeenCalled();
+      expect(mockUpdateProgress).not.toHaveBeenCalled();
+      if (invalidation !== "unmount") {
+        expect(screen.result.current.showResumePrompt).toBe(false);
+        await act(() => screen.result.current.reportProgress(true));
+        expect(mockUpdateProgress).not.toHaveBeenCalled();
+        await screen.unmount();
+      }
+    },
+  );
 
   it("does not consume a next-episode planning intent while the old URI is still mounted", async () => {
     const player = createMockPlayer();
