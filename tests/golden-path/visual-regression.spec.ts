@@ -339,15 +339,22 @@ test("matches the dark player, timeline preview, and settings baselines", async 
   await openFixturePlayer(page);
   await expect(page.getByTestId("player-screen")).toBeVisible();
   await expect(page.locator("video")).toBeVisible();
+  const video = page.locator("video");
+  // Autoplay can start after the controls mount on slower runners. Await it
+  // before issuing exactly one user pause for the intended screenshot state.
+  await expect
+    .poll(() =>
+      video.evaluate((element) => (element as HTMLVideoElement).paused),
+    )
+    .toBe(false);
   const pause = page.getByRole("button", { name: "Pause playback" });
-  if (await pause.isVisible()) {
-    await page.evaluate(() => {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-    });
-    await page.keyboard.press("k");
-  }
+  await expect(pause).toBeVisible();
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  });
+  await page.keyboard.press("k");
   const playPauseControl = page.getByRole("button", {
     name: /^(Play|Pause) playback$/,
   });
@@ -362,7 +369,6 @@ test("matches the dark player, timeline preview, and settings baselines", async 
     await expect(playPauseControl).not.toBeFocused();
     await expect(playPauseControl).toHaveCSS("outline-style", "none");
   };
-  const video = page.locator("video");
   const timeline = page.getByTestId("player-progress-slider");
   const watchedTimeline = page.getByTestId("player-timeline-watched");
   await expect
@@ -370,6 +376,9 @@ test("matches the dark player, timeline preview, and settings baselines", async 
       video.evaluate((element) => (element as HTMLVideoElement).paused),
     )
     .toBe(true);
+  await expect(
+    page.getByRole("button", { name: "Play playback", exact: true }),
+  ).toBeVisible();
   await expect
     .poll(() =>
       video.evaluate((element) => (element as HTMLVideoElement).duration),

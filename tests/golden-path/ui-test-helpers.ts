@@ -193,20 +193,22 @@ export async function attachGauntletVisualCase(
   const caseId = `${surface}-${viewportTarget}`;
   if (!requested.has(caseId)) return false;
 
+  const attachmentName = `gauntlet-visual:${caseId}:${colorScheme}:${viewport.width}x${viewport.height}`;
+  const captureIndex =
+    testInfo.attachments.filter(
+      (attachment) => attachment.name === attachmentName,
+    ).length + 1;
   const screenshotPath = testInfo.outputPath(
-    `gauntlet-${caseId}-${colorScheme}-${viewport.width}x${viewport.height}.png`,
+    `gauntlet-${caseId}-${colorScheme}-${viewport.width}x${viewport.height}-capture-${captureIndex}.png`,
   );
   await page.screenshot({
     ...deterministicScreenshotOptions,
     path: screenshotPath,
   });
-  await testInfo.attach(
-    `gauntlet-visual:${caseId}:${colorScheme}:${viewport.width}x${viewport.height}`,
-    {
-      path: screenshotPath,
-      contentType: "image/png",
-    },
-  );
+  await testInfo.attach(attachmentName, {
+    path: screenshotPath,
+    contentType: "image/png",
+  });
   return true;
 }
 
