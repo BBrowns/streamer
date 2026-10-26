@@ -519,7 +519,8 @@ async function probeDocumentAtUrl({
           return;
         }
         try {
-          finish(() => resolve(JSON.parse(output) as FfprobeDocument));
+          const document = JSON.parse(output) as FfprobeDocument;
+          finish(() => resolve(document));
         } catch {
           finish(() => reject(new Error(`${operation} returned invalid data`)));
         }

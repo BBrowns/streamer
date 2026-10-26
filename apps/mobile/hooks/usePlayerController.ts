@@ -34,6 +34,7 @@ import {
 import type { PlaybackDiagnosticEvent } from "../services/playback/PlaybackDiagnostics";
 import type { MediaSeekOptions } from "../services/playback/MediaPlayerAdapter";
 import type { MediaPlayerSnapshot } from "../services/playback/MediaPlayerAdapter";
+import { SeekAbortedError } from "../services/playback/ConfirmedMediaSeek";
 
 interface UsePlayerControllerProps {
   player: any; // Expo Video Player instance
@@ -113,6 +114,9 @@ export function usePlayerController({
   const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
   const [stats, setStats] = useState<StreamStats>({ speed: 0, peers: 0 });
   const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const [resumePromptTimeSeconds, setResumePromptTimeSeconds] = useState<
+    number | null
+  >(null);
   const [hasPromptedResume, setHasPromptedResume] = useState(false);
   const [readyPlaybackUri, setReadyPlaybackUri] = useState<string | null>(null);
   const [showNextEpisodeOverlay, setShowNextEpisodeOverlay] = useState(false);
@@ -317,6 +321,7 @@ export function usePlayerController({
   useEffect(() => {
     setHasPromptedResume(false);
     setShowResumePrompt(false);
+    setResumePromptTimeSeconds(null);
     progressClockRef.current.reset();
     lastReportedProgressRef.current = null;
   }, [mediaKey]);
@@ -396,7 +401,14 @@ export function usePlayerController({
         if (!commitSeek) {
           throw new Error("A confirmed media seek operation is unavailable.");
         }
-        return await commitSeek(position, { signal: controller.signal });
+        const actualPosition = await commitSeek(position, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) throw new SeekAbortedError();
+        return actualPosition;
+      } catch (error) {
+        if (controller.signal.aborted) throw new SeekAbortedError();
+        throw error;
       } finally {
         if (seekAbortRef.current === controller) seekAbortRef.current = null;
       }
@@ -415,8 +427,10 @@ export function usePlayerController({
   useEffect(() => {
     seekAbortRef.current?.abort();
     seekAbortRef.current = null;
-  }, [playbackUri]);
+  }, [mediaKey, playbackAttemptId, playbackSessionId, playbackUri, player]);
   const beginProgressSourceReplacement = useCallback(() => {
+    seekAbortRef.current?.abort();
+    seekAbortRef.current = null;
     progressClockRef.current.beginSourceReplacement();
   }, []);
   const completeProgressSourceReplacement = useCallback((position: number) => {
@@ -452,6 +466,29 @@ export function usePlayerController({
     };
   }, [playbackUri, player]);
 
+  const playFromPosition = useCallback(
+    (position: number, resumePosition = position) => {
+      setResumePromptTimeSeconds(resumePosition);
+      if (player.playing) player.pause();
+      void performConfirmedSeek(position)
+        .then((actualPosition) => {
+          recordExplicitSeek(actualPosition);
+          player.play();
+        })
+        .catch((error: unknown) => {
+          if (
+            error instanceof Error &&
+            (error.name === "AbortError" ||
+              error.name === "SeekSupersededError")
+          ) {
+            return;
+          }
+          setShowResumePrompt(true);
+        });
+    },
+    [performConfirmedSeek, player, recordExplicitSeek],
+  );
+
   // 3. Resume prompt logic. An explicit runtime launch intent wins over the
   // generic prompt and is consumed after one use, so Resume from Home seeks
   // directly while an explicit Play starts from the beginning.
@@ -479,12 +516,7 @@ export function usePlayerController({
         Number.isFinite(playbackLaunchIntent.positionSeconds) &&
         playbackLaunchIntent.positionSeconds >= 15
       ) {
-        void performConfirmedSeek(playbackLaunchIntent.positionSeconds)
-          .then((actualPosition) => {
-            recordExplicitSeek(actualPosition);
-            player.play();
-          })
-          .catch(() => undefined);
+        playFromPosition(playbackLaunchIntent.positionSeconds);
         consumePlaybackLaunchIntent();
         return;
       }
@@ -495,6 +527,7 @@ export function usePlayerController({
 
     if (previousProgress && previousProgress.currentTime > 15) {
       setHasPromptedResume(true);
+      setResumePromptTimeSeconds(previousProgress.currentTime);
       setShowResumePrompt(true);
       if (player.playing) player.pause();
     }
@@ -504,27 +537,21 @@ export function usePlayerController({
     playbackLaunchIntent,
     playbackUri,
     player,
-    performConfirmedSeek,
     previousProgress,
     readyPlaybackUri,
-    recordExplicitSeek,
+    playFromPosition,
   ]);
 
   const handleResumeResponse = useCallback(
     (resume: boolean) => {
       setShowResumePrompt(false);
-      if (resume && previousProgress && player) {
-        void performConfirmedSeek(previousProgress.currentTime)
-          .then((actualPosition) => {
-            recordExplicitSeek(actualPosition);
-            player.play();
-          })
-          .catch(() => undefined);
-        return;
-      }
-      player?.play();
+      if (!player) return;
+      playFromPosition(
+        resume ? (resumePromptTimeSeconds ?? 0) : 0,
+        resumePromptTimeSeconds ?? 0,
+      );
     },
-    [performConfirmedSeek, player, previousProgress, recordExplicitSeek],
+    [player, playFromPosition, resumePromptTimeSeconds],
   );
 
   // 4. Progress Reporting & Sync intervals
@@ -815,7 +842,7 @@ export function usePlayerController({
     playbackRoute: activeSourceRuntime?.route ?? null,
     bridgeJobId: activeSourceRuntime?.bridgeJobId ?? null,
     showResumePrompt,
-    resumePromptTimeSeconds: previousProgress?.currentTime ?? null,
+    resumePromptTimeSeconds,
     handleResumeResponse,
     showNextEpisodeOverlay,
     setShowNextEpisodeOverlay,

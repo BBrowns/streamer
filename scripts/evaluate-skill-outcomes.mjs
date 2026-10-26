@@ -223,6 +223,12 @@ function copyEvaluationContext(repoRoot, workspace, variant) {
     cpSync(skillRoot, join(workspace, ".agents", "skills"), {
       recursive: true,
     });
+    const libraryRoot = join(repoRoot, ".agents", "skill-library");
+    if (existsSync(libraryRoot)) {
+      cpSync(libraryRoot, join(workspace, ".agents", "skill-library"), {
+        recursive: true,
+      });
+    }
   }
 }
 
@@ -273,6 +279,13 @@ function evaluationSurfaceFingerprint(repoRoot, casesSource) {
     if (!existsSync(file)) continue;
     hash.update(skill);
     hash.update(readFileSync(file));
+  }
+  const libraryRoot = join(repoRoot, ".agents", "skill-library");
+  if (existsSync(libraryRoot)) {
+    for (const [path, contentHash] of [...fileSnapshot(libraryRoot)].sort()) {
+      hash.update(`skill-library/${path}`);
+      hash.update(contentHash);
+    }
   }
   return hash.digest("hex");
 }

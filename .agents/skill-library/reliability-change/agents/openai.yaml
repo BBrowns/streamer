@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reliability Change"
+  short_description: "Bound failures, retries, cancellation and recovery"
+  default_prompt: "Use $reliability-change to define and verify bounded failure, cancellation, retry, and recovery behavior."

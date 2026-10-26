@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -40,6 +46,244 @@ Next actions.
 [dependency security](./docs/DEPENDENCY_SECURITY.md), and
 [golden paths](./docs/AUTOMATED_GOLDEN_PATHS.md).
 `;
+
+function writeSkillFixture(root, collection, name) {
+  const directory = join(root, ".agents", collection, name);
+  mkdirSync(join(directory, "agents"), { recursive: true });
+  mkdirSync(join(directory, "references"));
+  writeFileSync(
+    join(directory, "SKILL.md"),
+    `---\nname: ${name}\ndescription: Use when reviewing this kind of change.\n---\n\n# Change\n\nRead the [checklist](references/checklist.md).\n`,
+  );
+  writeFileSync(
+    join(directory, "references", "checklist.md"),
+    "Check the change.\n",
+  );
+  writeFileSync(
+    join(directory, "agents", "openai.yaml"),
+    `interface:\n  default_prompt: "Use $${name} to review this change."\n`,
+  );
+  return directory;
+}
+
+function writeSkillArchitectureFixture(root, { portable = true } = {}) {
+  for (const name of [
+    "streamer-change-design",
+    "streamer-contract-change",
+    "streamer-delivery",
+    "streamer-dependency-change",
+    "streamer-incident-response",
+    "streamer-reliability-change",
+    "streamer-security-boundaries",
+    "streamer-ui-change",
+    "streamer-verification",
+  ]) {
+    writeSkillFixture(root, "skills", name);
+  }
+  if (portable) {
+    for (const name of [
+      "contract-change",
+      "dependency-change",
+      "incident-response",
+      "reliability-change",
+    ]) {
+      writeSkillFixture(root, "skill-library", name);
+    }
+  }
+}
+
+test("requires the portable library only when requested by the process gate", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-required-"));
+  try {
+    writeSkillArchitectureFixture(root, { portable: false });
+    assert.deepEqual(validateSkillArchitecture(root), []);
+    assert.deepEqual(
+      validateSkillArchitecture(root, { requirePortableSkills: true }),
+      ["missing .agents/skill-library"],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the process gate requires the portable library", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-process-gate-"));
+  try {
+    writeSkillArchitectureFixture(root, { portable: false });
+    writeFileSync(join(root, "AGENTS.md"), "# Agents\n");
+    assert.ok(
+      validateProcessAssets(root).includes("missing .agents/skill-library"),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("validates portable skill metadata and the existing context budget", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-metadata-"));
+  try {
+    writeSkillArchitectureFixture(root);
+    const library = join(root, ".agents", "skill-library");
+    writeFileSync(
+      join(library, "contract-change", "SKILL.md"),
+      "---\nname: other-name\ndescription: TODO\n---\n\n# Change\n",
+    );
+    writeFileSync(
+      join(library, "dependency-change", "SKILL.md"),
+      `---\nname: dependency-change\ndescription: Review dependencies.\n---\n\n${"word ".repeat(801)}\n`,
+    );
+    writeFileSync(
+      join(library, "incident-response", "agents", "openai.yaml"),
+      'default_prompt: "Review this incident."\n',
+    );
+    rmSync(join(library, "reliability-change", "agents", "openai.yaml"));
+
+    const errors = validateSkillArchitecture(root);
+    assert.ok(
+      errors.includes("contract-change: frontmatter name must match directory"),
+    );
+    assert.ok(errors.includes("contract-change: missing useful description"));
+    assert.ok(
+      errors.some((error) =>
+        error.startsWith(
+          "dependency-change: SKILL.md exceeds the 500-line/800-word context budget",
+        ),
+      ),
+    );
+    assert.ok(errors.includes("incident-response: missing interface metadata"));
+    assert.ok(
+      errors.includes(
+        "incident-response: default_prompt must mention $incident-response",
+      ),
+    );
+    assert.ok(
+      errors.includes("reliability-change: missing agents/openai.yaml"),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reports a missing portable core even when its library exists", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-missing-"));
+  try {
+    writeSkillArchitectureFixture(root);
+    rmSync(join(root, ".agents", "skill-library", "contract-change"), {
+      recursive: true,
+    });
+    assert.deepEqual(validateSkillArchitecture(root), [
+      "contract-change: missing SKILL.md",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("allows wrapper links to the library and links within portable skills", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-links-valid-"));
+  try {
+    writeSkillArchitectureFixture(root);
+    writeFileSync(
+      join(
+        root,
+        ".agents",
+        "skills",
+        "streamer-contract-change",
+        "references",
+        "checklist.md",
+      ),
+      "Read the [portable core](../../../skill-library/contract-change/SKILL.md).\n",
+    );
+    writeFileSync(
+      join(
+        root,
+        ".agents",
+        "skill-library",
+        "contract-change",
+        "references",
+        "checklist.md",
+      ),
+      "Read the [entrypoint](../SKILL.md#change).\n",
+    );
+    assert.deepEqual(validateSkillArchitecture(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects portable resource links escaping the copied skill directory", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-links-escape-"));
+  try {
+    writeSkillArchitectureFixture(root);
+    writeFileSync(
+      join(
+        root,
+        ".agents",
+        "skill-library",
+        "contract-change",
+        "references",
+        "checklist.md",
+      ),
+      "Read the [other core](../../dependency-change/SKILL.md).\n",
+    );
+    assert.deepEqual(validateSkillArchitecture(root), [
+      "contract-change/references/checklist.md: linked resource escapes skill directory ../../dependency-change/SKILL.md",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reports broken links inside portable references", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-links-missing-"));
+  try {
+    writeSkillArchitectureFixture(root);
+    writeFileSync(
+      join(
+        root,
+        ".agents",
+        "skill-library",
+        "contract-change",
+        "references",
+        "checklist.md",
+      ),
+      "Read the [missing checklist](missing.md).\n",
+    );
+    assert.deepEqual(validateSkillArchitecture(root), [
+      "contract-change/references/checklist.md: missing linked resource missing.md",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects portable resource symlinks that resolve outside the skill", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-portable-symlink-"));
+  try {
+    writeSkillArchitectureFixture(root);
+    const skill = join(root, ".agents", "skill-library", "contract-change");
+    symlinkSync(
+      join(
+        root,
+        ".agents",
+        "skill-library",
+        "dependency-change",
+        "references",
+        "checklist.md",
+      ),
+      join(skill, "references", "external.md"),
+    );
+    writeFileSync(
+      join(skill, "references", "checklist.md"),
+      "Read the [linked core](external.md).\n",
+    );
+    assert.deepEqual(validateSkillArchitecture(root), [
+      "contract-change/references/checklist.md: linked resource escapes skill directory external.md",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("rejects broken links in nested skill references", () => {
   const root = mkdtempSync(join(tmpdir(), "streamer-skill-links-"));

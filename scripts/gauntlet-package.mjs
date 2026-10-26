@@ -1363,9 +1363,7 @@ export function finishPackage({
             result.duration >= 0
               ? new Date(resultStartedAt + result.duration).toISOString()
               : undefined;
-          for (const [attachmentIndex, attachment] of (
-            result.attachments ?? []
-          ).entries()) {
+          for (const attachment of result.attachments ?? []) {
             const visual = importVisualAttachment({
               root,
               directory,
@@ -1381,7 +1379,7 @@ export function finishPackage({
                 result.status === "passed"
                   ? "passed"
                   : "failed",
-              index: number * 10 + attachmentIndex,
+              index: visualEvidence.length,
               runId: baseline.taskId,
               missingEvidence,
             });

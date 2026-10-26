@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/runtime_policy.py\"",
+            "command": "PATH=/usr/bin:/bin:$PATH /usr/bin/python3 \"$(/usr/bin/git rev-parse --show-toplevel)/.codex/hooks/runtime_policy.py\"",
             "timeout": 5,
             "statusMessage": "Checking Streamer runtime",
             "additionalContextLimit": 256
@@ -21,12 +21,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/graphify_hook.py\" hook-check",
+            "command": "PATH=/usr/bin:/bin:$PATH /usr/bin/python3 \"$(/usr/bin/git rev-parse --show-toplevel)/.codex/hooks/graphify_hook.py\" hook-check",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/runtime_policy.py\"",
+            "command": "PATH=/usr/bin:/bin:$PATH /usr/bin/python3 \"$(/usr/bin/git rev-parse --show-toplevel)/.codex/hooks/runtime_policy.py\"",
             "timeout": 5,
             "statusMessage": "Checking repository command policy"
           }

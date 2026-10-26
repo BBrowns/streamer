@@ -431,6 +431,114 @@ function captureVisual(root, runDirectory, attemptId) {
   return reportPath;
 }
 
+test("preserves overlapping visual captures from separate Playwright reports", (t) => {
+  const { root, put } = fixture(t);
+  const runDirectory = startVisualRun(root, put);
+  const reports = ["first-report", "second-report"].map((attemptId) => ({
+    path: captureVisual(root, runDirectory, attemptId),
+    attemptId,
+  }));
+  const { package: pkg, packagePath } = finishPackage({
+    root,
+    runDirectory,
+    playwrightReports: reports,
+  });
+  const captures = pkg.gauntletInput.evidence.filter(
+    (item) => item.kind === "visual-screenshot",
+  );
+
+  assert.equal(captures.length, 2);
+  assert.equal(new Set(captures.map((item) => item.id)).size, 2);
+  assert.equal(new Set(captures.map((item) => item.path)).size, 2);
+  assert.deepEqual(
+    captures.map((item) => item.captureContext.attemptId),
+    reports.map((report) => report.attemptId),
+  );
+  for (const capture of captures) {
+    const original = readFileSync(
+      join(root, `visual/${capture.captureContext.attemptId}.png`),
+    );
+    assert.deepEqual(readFileSync(join(root, capture.path)), original);
+    assert.equal(
+      capture.screenshotHash,
+      createHash("sha256").update(original).digest("hex"),
+    );
+    assert.equal(capture.markerBinding, "paired");
+    assert.equal(capture.candidateBinding, "current");
+    assert.equal(
+      capture.candidateIdentity.fingerprint,
+      pkg.candidate.fingerprint,
+    );
+  }
+  const bindings = reviewBindings(pkg.gauntletInput, { root });
+  assert.deepEqual(
+    read(join(dirname(packagePath), "phase1-bindings.json")).bindings,
+    {
+      task: bindings.task,
+      candidate: bindings.candidate,
+      evidence: bindings.evidence,
+      checkInventory: bindings.checkInventory,
+      visualContract: bindings.visualContract,
+      visualCases: bindings.visualCases,
+    },
+  );
+});
+
+test("preserves repeated visual results and attachments without promoting failed or skipped tests", (t) => {
+  const { root, put } = fixture(t);
+  const runDirectory = startVisualRun(root, put);
+  const path = captureVisual(root, runDirectory, "repeated-captures");
+  const report = read(join(root, path));
+  const tests = report.suites[0].specs[0].tests;
+  const passed = tests[0];
+  const result = passed.results[0];
+  passed.results.push({
+    ...result,
+    attachments: [...result.attachments, ...result.attachments],
+  });
+  tests.push(
+    {
+      ...passed,
+      status: "unexpected",
+      results: [{ ...result, status: "failed" }],
+    },
+    {
+      ...passed,
+      status: "skipped",
+      expectedStatus: "skipped",
+      results: [{ ...result, status: "skipped" }],
+    },
+  );
+  put(path, JSON.stringify(report));
+
+  const { package: pkg } = finishPackage({
+    root,
+    runDirectory,
+    playwrightReports: [{ path, attemptId: "repeated-captures" }],
+  });
+  const captures = pkg.gauntletInput.evidence.filter(
+    (item) => item.kind === "visual-screenshot",
+  );
+  assert.equal(captures.length, 3);
+  assert.equal(new Set(captures.map((item) => item.id)).size, 3);
+  assert.equal(new Set(captures.map((item) => item.path)).size, 3);
+  const original = readFileSync(join(root, result.attachments[0].path));
+  for (const capture of captures)
+    assert.deepEqual(readFileSync(join(root, capture.path)), original);
+  assert.deepEqual(
+    pkg.checkInventory
+      .filter((item) => item.sourceKind === "playwright-json")
+      .map((item) => item.status),
+    ["passed", "failed", "skipped"],
+  );
+  assert.equal(
+    pkg.missingEvidence.filter(
+      (item) => item.reason === "visual-screenshot-test-not-passed",
+    ).length,
+    2,
+  );
+});
+
 function attachCurrentVisualP1Review(root, pkg, gauntletInputPath) {
   const input = pkg.gauntletInput;
   const bindings = reviewBindings(input, { root });

@@ -10,6 +10,34 @@ const require = createRequire(import.meta.url);
 const braces = require("braces");
 const forge = require("node-forge");
 
+for (const kind of ["array", "set", "map"]) {
+  test(`Zod rejects oversized ${kind} input before visiting elements`, () => {
+    const { z } = require("zod");
+    let visits = 0;
+    const element = z.number().transform((value) => {
+      visits += 1;
+      return value;
+    });
+    const schema =
+      kind === "array"
+        ? z.array(element).max(2)
+        : kind === "set"
+          ? z.set(element).max(2)
+          : z.map(z.string(), element).max(2);
+    const input = (values) =>
+      kind === "array"
+        ? values
+        : kind === "set"
+          ? new Set(values)
+          : new Map(values.map((value) => [String(value), value]));
+
+    assert.equal(schema.safeParse(input([1, 2, 3])).success, false);
+    assert.equal(visits, 0);
+    assert.equal(schema.safeParse(input([1, 2])).success, true);
+    assert.equal(visits, 2);
+  });
+}
+
 function makeUdpAnnounce(ipBytes) {
   const message = Buffer.alloc(98);
   Buffer.from("0000041727101980", "hex").copy(message, 0);
