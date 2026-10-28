@@ -341,6 +341,26 @@ Sources: [body-parser advisory](https://github.com/advisories/GHSA-27r3-jxmh-p82
 [Zod 4.6.7 release](https://github.com/colinhacks/zod/releases/tag/v4.6.7),
 [undici 6.29.1 release](https://github.com/nodejs/undici/releases/tag/v6.29.1).
 
+## Framework maintenance follow-up — 2026-10-27
+
+The framework batch defers Expo SDK package updates that would also move the
+config-plugin chain to Xcode 4. React and React DOM remain on 19.3.0,
+gesture-handler remains on 3.3.0, and Expo Video stays on 58.0.11 with its
+existing native patch until a separate compatible migration and native
+validation are available.
+
+The Sentry CLI install-script approval advances from 3.8.0 to exactly 3.8.1;
+the separate 2.58.6 approval remains. The published installer script is byte
+identical to 3.8.0 and uses the version-pinned platform package when present,
+otherwise it can download a binary from the configured CDN. The published
+package includes checksums, but its fallback can skip checksum validation when
+an entry is absent or when explicitly configured to do so. CI disables lifecycle
+scripts during installation and executes only its explicitly reviewed steps.
+The updated platform binaries are integrity-pinned in the lockfile, but were
+not independently audited here. Owner: mobile platform maintainers. Review the
+exact installer and binary provenance again at the next Sentry CLI upgrade.
+Source: [Sentry CLI 3.8.0 to 3.8.1 comparison](https://github.com/getsentry/sentry-cli/compare/3.8.0...3.8.1).
+
 ## Upgrade Routine
 
 1. Switch to the pinned Node/npm versions.
