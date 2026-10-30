@@ -12,10 +12,13 @@ import { request } from "./test-utils.js";
 import crypto from "crypto";
 import { _resetFailedAttempts } from "../src/modules/auth/auth.service.js";
 import { _resetStore } from "../src/middleware/rateLimiter.middleware.js";
+import { startSearchAddonFixture } from "./fixtures/searchable-addon.fixture.js";
 
 let app: any;
 let prisma: any;
 let dbUri: string;
+let addonFixture: ReturnType<typeof startSearchAddonFixture>;
+let originalPrivateNetworks: string | undefined;
 
 // Mock logger to be silent in tests
 vi.mock("../src/config/logger.js", () => ({
@@ -30,6 +33,11 @@ vi.mock("../src/config/logger.js", () => ({
 }));
 
 beforeAll(async () => {
+  if (process.env.NODE_ENV !== "test")
+    throw new Error("Test environment required");
+  originalPrivateNetworks = process.env.ADDON_ALLOW_PRIVATE_NETWORKS;
+  process.env.ADDON_ALLOW_PRIVATE_NETWORKS = "true";
+  addonFixture = startSearchAddonFixture();
   const envUrl = process.env.DATABASE_URL;
   dbUri =
     envUrl?.startsWith("postgresql://") || envUrl?.startsWith("postgres://")
@@ -54,6 +62,10 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
+  addonFixture?.close();
+  if (originalPrivateNetworks === undefined)
+    delete process.env.ADDON_ALLOW_PRIVATE_NETWORKS;
+  else process.env.ADDON_ALLOW_PRIVATE_NETWORKS = originalPrivateNetworks;
   await new Promise((resolve) => setTimeout(resolve, 50));
   if (prisma) await prisma.$disconnect();
 });
@@ -149,7 +161,7 @@ describe("Integration: Aggregator Logic", () => {
   });
 
   it("should allow installing an addon and retrieving its catalog", async () => {
-    const addonUrl = "https://v3-cinemeta.strem.io/manifest.json";
+    const addonUrl = `${addonFixture.baseUrl}/golden-path/manifest.json`;
 
     // Install Addon
     const installRes = await request(app)
@@ -164,18 +176,25 @@ describe("Integration: Aggregator Logic", () => {
 
     expect(installRes.status).toBe(201);
     expect(installRes.body).toBeDefined(); // The response IS the addon in this case or has addon depending on controller
+    expect(addonFixture.goldenPathRequests).toContain("manifest.json");
 
     // Fetch Catalog
-    // Given that it's an integration test with real external HTTP requests,
-    // we might hit real Cinemeta API.
     const catRes = await request(app)
       .get("/api/catalog/movie")
       .set("Authorization", `Bearer ${accessToken}`);
 
     expect(catRes.status).toBe(200);
-    // We expect Cinemeta to return some popular movies
-    expect(catRes.body.metas.length).toBeGreaterThan(0);
-    expect(catRes.body.metas[0].id).toBeDefined();
-    expect(catRes.body.metas[0].name).toBeDefined();
+    expect(catRes.body.metas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "tt0111161",
+          name: "Fixture Movie",
+          poster: "https://fixture.example/poster.jpg",
+        }),
+      ]),
+    );
+    expect(addonFixture.goldenPathRequests).toContain(
+      "catalog/movie/popular.json",
+    );
   });
 });
