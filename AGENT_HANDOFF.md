@@ -1,8 +1,8 @@
 # Streamer Agent Handoff
 
-> Last updated: 2026-09-16.
-> Handoff branch: codex/fix-push-release-gate.
-> Handoff revision: 67e0c3ab66d02aa6f1c7581f4baef4346296724f
+> Last updated: 2026-11-02.
+> Handoff branch: master.
+> Handoff revision: 300ab952ab412831871bf2ae64c0387a9ef2be6d
 > Audience: humans and agents continuing Streamer product, playback, release,
 > or process work.
 
@@ -28,13 +28,12 @@ the source of truth for projected runtime pins.
 
 ## Active Work
 
-The active production-convergence branch at this handoff is
-`codex/living-cinema-convergence`, based on the then-current `origin/master`.
-It contains the reviewed Living Cinema convergence slices and preserves
-existing ownership, routing, playback, provider, download, cast, source-safety,
-and offline contracts. The original dirty checkout and the earlier broad
-`codex/living-cinema` worktree remain separate; do not clean, reset, or stage
-either one indiscriminately.
+The inspected baseline is `master` at the revision above. Current maintenance
+focuses on compatible dependency updates and CI reliability while preserving
+the Living Cinema presentation and existing ownership, routing, playback,
+provider, download, cast, source-safety, and offline contracts. Independent
+feature branches and worktrees may contain unrelated changes; inspect their
+state before acting and do not clean, reset, or stage them indiscriminately.
 
 The current UI direction includes adaptive cinema surfaces, a horizontal
 desktop top bar, full-bleed Home and Detail layouts, responsive Search, Player,
@@ -72,10 +71,11 @@ legacy presentation removal, and risk-based golden-path assertions. Step 9,
 the asymmetrical Continue Watching experiment, has intentionally not started
 and must remain a separate branch/worktree and approval.
 
-The same worktree also contains a compact repository-skill redesign. Its nine
-skills, registry, activation fixtures, process validators, maintenance scripts,
-runtime policy and changed-file verification are process infrastructure. Keep
-that scope separate from the product diff.
+The repository-skill infrastructure is present on master: portable cores and
+Streamer overlays, registry and activation fixtures, process validators,
+maintenance scripts, runtime policy, changed-file verification, and the local
+Gauntlet review workflow. Use these existing checks for scoped changes and keep
+process infrastructure separate from product changes.
 
 ## Release Blockers
 
@@ -93,11 +93,14 @@ that scope separate from the product diff.
 
 ## Next Actions
 
-1. Finish and verify the process-skill redesign against explicit process-owned
-   files without absorbing unrelated Living Cinema changes.
-2. Keep the exact-file Living Cinema verification receipt current with each
-   reviewed convergence commit and any remaining visual finding. The current
-   receipt is [2026-08-26 Living Cinema convergence](./docs/qa-runs/2026-08-26-living-cinema-convergence.md).
+1. Triage dependency and CI failures by their underlying cause, preserve the
+   supported framework/native contracts, and run install-policy, compatibility,
+   and production-audit checks before the broader repository gates.
+2. Bind each new verification receipt and independent review to the actual
+   candidate and task-owned files. The
+   [2026-08-26 Living Cinema convergence receipt](./docs/qa-runs/2026-08-26-living-cinema-convergence.md)
+   is historical evidence for that UI scope, not evidence for current dependency
+   or release candidates.
 3. Run the documented browser and simulator flows, preserving the distinction
    between automated evidence and real-target evidence.
 4. Execute the QA matrix on packaged macOS, browser, iPhone, and Android when
@@ -113,7 +116,7 @@ that scope separate from the product diff.
 - [UI.md](./UI.md) — adaptive UI and Living Cinema behavior.
 - [docs/QA_MATRIX.md](./docs/QA_MATRIX.md) — target-by-target evidence status.
 - [docs/qa-runs/2026-08-26-living-cinema-convergence.md](./docs/qa-runs/2026-08-26-living-cinema-convergence.md)
-  — exact-scope convergence verification receipt.
+  — historical, exact-scope convergence verification receipt.
 - [docs/RC_CHECKLIST.md](./docs/RC_CHECKLIST.md) — release decision inputs.
 - [docs/DEPENDENCY_SECURITY.md](./docs/DEPENDENCY_SECURITY.md) — dependency and
   install-script policy.

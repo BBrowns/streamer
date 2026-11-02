@@ -25,23 +25,6 @@ export const LOCAL_SECURITY_PATCHES = Object.freeze({
     patchFile: "patches/braces+3.0.3.patch",
     sourceMarkers: ["const MAX_DEPTH = 100;", "if (stack.length > MAX_DEPTH)"],
   },
-  "GHSA-86W9-CPQP-85RV": {
-    dependency: "node-forge",
-    version: "1.4.0",
-    reviewBy: "2026-11-19",
-    owner: "mobile platform maintainers",
-    reason:
-      "The published node-forge 1.4.0 package has no upstream release fix; verification now rejects unconsumed nested DigestAlgorithm elements.",
-    nextAction:
-      "Re-check the upstream fix status by 2026-11-19 and remove this local patch when a fixed node-forge release is available and resolved.",
-    scope:
-      "node-forge@1.4.0 at node_modules/node-forge, used by Expo SDK 58 and @expo/cli 58.0.14",
-    allowedNodes: ["node_modules/node-forge"],
-    packageJsonPath: "node_modules/node-forge/package.json",
-    sourcePath: "node_modules/node-forge/lib/rsa.js",
-    patchFile: "patches/node-forge+1.4.0.patch",
-    sourceMarkers: ["CVE-2026-85393", "obj.value[0].value.length !=="],
-  },
 });
 
 function advisoryId(url) {
