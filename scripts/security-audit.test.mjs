@@ -57,12 +57,6 @@ const currentVulnerableAdvisories = [
     url: "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
     nodes: ["node_modules/braces"],
   },
-  {
-    id: "GHSA-86W9-CPQP-85RV",
-    name: "node-forge",
-    url: "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
-    nodes: ["node_modules/node-forge"],
-  },
 ];
 
 test("accepts only exact production findings covered by applied local patches", () => {
@@ -94,6 +88,39 @@ test("accepts only exact production findings covered by applied local patches", 
     assert.equal(result.blocking.length, 0);
     assert.equal(result.reviewed.length, 0);
     assert.equal(result.patched.length, 1);
+  }
+});
+
+test("blocks historical node-forge findings after retiring the local patch", () => {
+  const root = mkdtempSync(join(tmpdir(), "streamer-retired-patch-audit-"));
+  try {
+    const historicalFiles = {
+      "node_modules/node-forge/package.json": JSON.stringify({
+        version: "1.4.0",
+      }),
+      "node_modules/node-forge/lib/rsa.js":
+        "// CVE-2026-85393\nobj.value[0].value.length !== 2;",
+      "patches/node-forge+1.4.0.patch": "historical applied patch",
+    };
+    for (const [file, content] of Object.entries(historicalFiles)) {
+      const path = join(root, file);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, content);
+    }
+
+    const result = evaluateAuditReport(
+      reportFor({
+        name: "node-forge",
+        url: "https://github.com/advisories/GHSA-86w9-cpqp-85rv",
+      }),
+      { now: new Date("2026-11-02T00:00:00.000Z"), root },
+    );
+
+    assert.equal(result.blocking.length, 1);
+    assert.equal(result.reviewed.length, 0);
+    assert.equal(result.patched.length, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
