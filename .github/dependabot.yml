@@ -18,36 +18,33 @@ updates:
       - dependency-name: typescript
         versions:
           - ">=7.0.0"
-      # Expo SDK 57 remains pinned to the validated React Native 0.86.x line.
+      # Expo SDK 58 uses the validated React Native 0.88.x line. Keep patches
+      # reviewable while holding the next native/tooling migration.
       - dependency-name: react-native
         versions:
-          - ">=0.87.0"
-      # Expo SDK 57 also pins the React Native tooling packages to 0.86.x;
-      # Metro 0.87 pulls image-size advisories that are not safe to allow.
+          - ">=0.89.0"
       - dependency-name: "@react-native/metro-config"
         versions:
-          - ">=0.87.0"
+          - ">=0.89.0"
       - dependency-name: "@react-native/jest-preset"
         versions:
-          - ">=0.87.0"
-      # Expo SDK 57's expo-modules-core peer contract ends at Worklets 0.10.x;
-      # review the Worklets/Reanimated pair with the next Expo SDK migration.
+          - ">=0.89.0"
+      # SDK 58's native adapter and Reanimated 4.7 use Worklets 0.13.x;
+      # review the next Worklets/Reanimated lines together.
       - dependency-name: react-native-worklets
         versions:
-          - ">=0.11.0"
-      # Reanimated 4.6 requires Worklets 0.12.x, outside Expo SDK 57's native
-      # adapter contract. Keep the latest compatible 4.5.x patch line.
+          - ">=0.14.0"
       - dependency-name: react-native-reanimated
         versions:
-          - ">=4.6.0"
-      # Jest 30 is not compatible with the current Expo/RN Jest preset; keep
-      # the tested Jest 29 line until the owning toolchain is migrated.
+          - ">=4.8.0"
+      # Keep the validated Jest 30 line with the SDK 58 / RN 0.88 presets;
+      # a Jest major requires a coordinated test-toolchain migration.
       - dependency-name: jest
         versions:
-          - ">=30.0.0"
+          - ">=31.0.0"
       - dependency-name: "@types/jest"
         versions:
-          - ">=30.0.0"
+          - ">=31.0.0"
       # NativeWind 4.2.x has a Tailwind 3 peer contract; Tailwind 4 needs a
       # coordinated NativeWind migration instead of an isolated bot bump.
       - dependency-name: tailwindcss
@@ -87,22 +84,36 @@ updates:
           - "expo"
           - "expo-*"
           - "@expo/*"
+          - "@expo-*/*"
           - "react"
           - "react-*"
           - "react-native"
           - "react-native-*"
           - "@react-native/*"
+          - "@react-native-*/*"
+          - "@types/react*"
+          - "@tanstack/react-*"
+          - "@testing-library/react-*"
           - "electron"
+          - "electron-*"
+          - "@electron/*"
+          - "jest"
+          - "jest-*"
+          - "@types/jest"
           - "@prisma/*"
           - "prisma"
           - "typescript"
           - "@typescript-eslint/*"
           - "@sentry/*"
           - "@hono/*"
+          - "hono"
+          - "@scalar/hono-*"
           - "nativewind"
           - "tailwindcss"
           - "esbuild"
           - "@rollup/*"
+          - "sharp"
+          - "*sqlite*"
         update-types:
           - minor
           - patch

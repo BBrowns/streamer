@@ -49,8 +49,8 @@ CI also:
   Dependabot updates;
 - queues only safe Dependabot patch/minor PRs for protected auto-merge. Expo,
   React Native, Electron, Prisma, TypeScript, Sentry, Hono, NativeWind,
-  Tailwind, native, and major updates stay manual and require a code-owner
-  review;
+  Tailwind, Jest/Vitest, native, and major updates stay manual and require
+  review by their code owner;
 - applies Prisma migrations in CI instead of mutating the schema with
   `db push`;
 - enforces finite timeouts on every CI and release job;
@@ -71,11 +71,22 @@ Push protection is the preventive secret gate; do not replace it with an ad hoc
 regular-expression scan. If these server-side controls are unavailable or
 disabled, restore an equivalent reviewed scanner before removing this policy.
 
-`CODEOWNERS` keeps the dependency manifests, release workflows, migration
-directory, and security tooling assigned to the repository owner. The master
-ruleset requires at least one approving review; automatic Dependabot merges can
-only enter the merge queue after the required CI and dependency-review checks
-are green.
+`CODEOWNERS` assigns the dependency manifests, release workflows, migration
+directory, and security tooling to the repository owner. That assignment does
+not itself enforce an approving review. Approval counts and code-owner review
+requirements are controlled by the active GitHub master ruleset; check those
+settings before claiming that a review is enforced. Automatic Dependabot
+merges still wait for the required Release Gate, Review Dependency Changes,
+and CodeQL checks. The workflow does not bypass the ruleset.
+
+Dependabot ignore ranges must leave the validated toolchain's patch releases
+available for review. SDK58 uses React Native/tooling 0.88.x, Worklets 0.13.x,
+Reanimated 4.7.x and Jest 30.x. Review these boundaries alongside the dependency
+compatibility contracts after a coordinated migration. Manual version-update
+groups also include the related Jest/Expo presets, scoped React packages,
+Electron tooling and Hono adapters so those packages cannot make an ordinary
+maintenance group ineligible for auto-merge. Workflow tests exercise the real
+auto-merge policy, including missing metadata and mixed protected updates.
 
 `security:audit` rejects **high and critical production dependency findings**.
 It runs npm's production audit and permits only exact, unexpired advisory

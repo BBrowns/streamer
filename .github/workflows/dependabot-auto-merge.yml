@@ -47,6 +47,11 @@ jobs:
             exit 0
           fi
 
+          if [[ -z "${DEPENDENCY_NAMES//[[:space:]]/}" ]]; then
+            echo "Skipping auto-merge because dependency metadata is absent."
+            exit 0
+          fi
+
           case "${UPDATE_TYPE}" in
             version-update:semver-patch|version-update:semver-minor)
               ;;
@@ -57,12 +62,12 @@ jobs:
               ;;
           esac
 
-          dependency_names="${DEPENDENCY_NAMES,,}"
+          dependency_names="$(printf '%s' "${DEPENDENCY_NAMES}" | tr '[:upper:]' '[:lower:]')"
           for protected_pattern in \
             "expo" "@expo/" "react" "react-native" "electron" \
             "prisma" "typescript" "@typescript-eslint/" "@sentry/" \
             "hono" "@hono/" "nativewind" "tailwindcss" "esbuild" \
-            "@rollup/" "sharp" "sqlite" "vitest"; do
+            "@rollup/" "sharp" "sqlite" "vitest" "jest"; do
             if [[ "${dependency_names}" == *"${protected_pattern}"* ]]; then
               echo "eligible=false" >> "${GITHUB_OUTPUT}"
               echo "Skipping auto-merge for protected dependency: ${protected_pattern}"
