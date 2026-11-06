@@ -421,6 +421,23 @@ digest. The development toolchain remains Node 26.7.0 / npm 12.0.2. Container
 verification uses disposable test resources and does not upgrade an existing
 development or production database.
 
+The subsequent compatible framework maintenance advances Electron from 45.1.0
+to 45.2.0 and the server's separate optional Linux/x64/glibc Rollup helper from
+4.66.0 to 4.67.2. Electron retains the same embedded runtime versions, native
+ABI, dependencies and installer JavaScript; no install-script approval changes
+are required. The Rollup helper has no dependencies or lifecycle scripts, and
+its registry integrity was checked. Root Rollup and its matching native helper
+remain on 4.62.4. These checks do not independently audit the shipped binaries.
+Sources: [Electron 45.2.0 release](https://releases.electronjs.org/release/v45.2.0),
+[Rollup 4.67.2 release](https://github.com/rollup/rollup/releases/tag/v4.67.2).
+
+The coordinated Expo/RN/Xcode updates described above remain deferred. Keep
+mobile manifest declarations aligned with the validated lockfile and root
+overrides; a successful install or browser test alone does not establish a
+supported native migration. Owner: mobile platform maintainers. Removal
+condition: compatible dependency contracts and fresh native build/runtime
+evidence for that migration.
+
 ## Upgrade Routine
 
 1. Switch to the pinned Node/npm versions.
