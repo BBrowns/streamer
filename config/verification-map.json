@@ -234,13 +234,23 @@
       "finalCommands": ["npm run verify:quick"]
     },
     {
+      "id": "google-cast-compatibility",
+      "visualImpact": "no",
+      "patterns": [
+        "^apps/mobile/app\\.json$",
+        "^scripts/dependency-google-cast-compatibility\\.test\\.mjs$"
+      ],
+      "focusedCommands": ["npm run dependency:google-cast-compatibility:test"],
+      "finalCommands": []
+    },
+    {
       "id": "dependency",
       "visualImpact": "unknown",
       "patterns": [
         "(^|/)package\\.json$",
         "^package-lock\\.json$",
         "^patches/",
-        "^scripts/(security-audit|check-install-script-policy|dependency-)"
+        "^scripts/(security-audit|check-install-script-policy|dependency-(?!google-cast-compatibility))"
       ],
       "focusedCommands": [
         "npm run dependency:compatibility:test",

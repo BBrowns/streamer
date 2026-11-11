@@ -184,12 +184,21 @@ major override:
   upstream. The compatibility tests cover chunked records, malformed JSONL,
   stream completion and trace merging in both module formats.
 
-The Expo Updates Android dev-client patch is retargeted to `58.0.17`, and the
-Expo Video Android/iOS patch is retargeted to `58.0.11` after applying each
+The Expo Updates Android dev-client patch is retargeted to `58.0.22`, and the
+Expo Video Android/iOS patch is retargeted to `58.0.14` after applying each
 patch against the SDK58 package source. Remove either patch once an upstream
 update preserves the tested startup and playback behavior without it. Owner:
 mobile platform maintainers. Review these patches before the next release
 candidate.
+
+The React Native Google Cast config plugin defaults to the floating Gradle
+version `+`. The Android Cast SDK is pinned to `22.3.1`, the latest published
+release with this dependency update, so Gradle does not select the newer
+`23.0.0` artifact whose Kotlin metadata exceeds the React Native toolchain
+compiler. Owner: mobile platform maintainers. Remove the pin when a newer Cast
+release builds with the repository's pinned Android/Kotlin toolchain. The
+compatibility test renders both Android Gradle mods in memory and checks the
+resolved version.
 
 ## October 2026 CI Remediation
 
@@ -239,16 +248,6 @@ dependency when a maintained compatible client is selected; do not downgrade
 The `ws` overrides preserve the major line expected by each consumer while
 raising each line to a patched release. Avoid a global `ws` major override,
 which would make Expo/React Native tooling invalid.
-
-The Expo config-plugin chain still depends on `xcode@3.0.1`, whose UUID helper
-range is stuck on the vulnerable `uuid@7` line. The root development dependency
-now tracks `uuid@14.0.2`, while a scoped `xcode` override keeps
-`uuid@11.1.1` next to xcode because that release still exposes the CommonJS
-`uuid.v4()` call that xcode uses. The server workspace continues to use its
-direct UUID 14 runtime. `npm run dependency:compatibility:test` exercises that
-exact topology. Remove the scoped override when the Expo toolchain ships an
-`xcode` release with a compatible UUID API, and retain the lockfile/API smoke
-check when doing so.
 
 The mobile color extraction package follows `node-vibrant`'s browser entry in
 the supported web path, so the unused Node/Jimp adapter is replaced with the
@@ -448,6 +447,14 @@ overrides; a successful install or browser test alone does not establish a
 supported native migration. Owner: mobile platform maintainers. Removal
 condition: compatible dependency contracts and fresh native build/runtime
 evidence for that migration.
+
+## PR 373 compatibility update — 2026-11-11
+
+The mobile manifest now uses the package ranges bundled with Expo SDK 58.0.24. The intentional `expo.install.exclude` entries are AsyncStorage, Sentry React Native, and FlashList. React and React DOM remain on 19.3.0; Gesture Handler remains on 3.3.0 and Worklets on 0.13.0. Safe-area and Screens overrides align to 5.11.1 and 4.30.1. Expo Updates follows the SDK’s `~58.0.22` range, and Expo Video uses `~58.0.14`.
+
+Expo Video 58.0.14 does not expose the native seekable and buffered range properties used by the player adapter, so `patches/expo-video+58.0.14.patch` preserves them on iOS and Android. Owner: mobile platform maintainers. Removal condition: an upstream version exposes equivalent native range properties and the player-seeking simulator test passes on that version. The compatibility test checks the bundled SDK matrix, current peer contracts, and both native range surfaces. The obsolete Xcode 3 override is removed; the compatibility test retains a project UUID generation smoke check.
+
+Install and compatibility checks do not establish native-device playback. Record simulator and physical-device results separately, and keep physical-device playback evidence as a distinct release requirement.
 
 ## Upgrade Routine
 

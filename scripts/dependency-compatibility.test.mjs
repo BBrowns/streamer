@@ -82,16 +82,17 @@ test("Vitest workspaces and coverage resolve one exact compatible version", () =
   }
 });
 
-test("Expo xcode tooling resolves the patched CommonJS UUID API", () => {
+test("Expo config tooling generates valid Xcode project UUIDs", () => {
   const xcode = require("xcode");
-  const uuidPackage = require("uuid/package.json");
-  const xcodeUuidPackage = require("xcode/node_modules/uuid/package.json");
+  const lockfile = readLockfile();
+  const xcodePackage = lockfile.packages["node_modules/xcode"];
   const project = xcode.project("unused.pbxproj");
 
   project.hash = { project: { objects: {} } };
 
-  assert.equal(uuidPackage.version, "14.0.3");
-  assert.equal(xcodeUuidPackage.version, "11.1.1");
+  assert.ok(xcodePackage);
+  assert.ok(semver.satisfies(xcodePackage.version, ">=4.0.0"));
+  assert.equal(xcodePackage.dependencies?.uuid, undefined);
   assert.match(project.generateUuid(), /^[0-9A-F]{24}$/);
 });
 
@@ -160,10 +161,13 @@ test("Bunyamin CommonJS and ESM trace merging preserves array records", async ()
   }
 });
 
-test("React Native 0.88 resolves the supported Metro line without image-size", () => {
+test("React Native resolves its compatible Metro toolchain without image-size", () => {
   const lockfile = readLockfile();
+  const reactNative = lockfile.packages["node_modules/react-native"];
   const metroConfig =
     lockfile.packages["node_modules/@react-native/metro-config"];
+  const metro = lockfile.packages["node_modules/metro"];
+  const metroConfigPackage = lockfile.packages["node_modules/metro-config"];
   const metroNodes = Object.entries(lockfile.packages).filter(
     ([path]) =>
       path === "node_modules/metro" || path.endsWith("/node_modules/metro"),
@@ -174,16 +178,30 @@ test("React Native 0.88 resolves the supported Metro line without image-size", (
       path.endsWith("/node_modules/image-size"),
   );
 
-  assert.equal(metroConfig.version, "0.88.0");
+  assert.ok(reactNative);
+  assert.ok(metroConfig);
+  assert.ok(metro);
+  assert.ok(metroConfigPackage);
+  const reactNativeLine = `~${semver.major(reactNative.version)}.${semver.minor(reactNative.version)}.0`;
+  assert.ok(semver.satisfies(metroConfig.version, reactNativeLine));
+  assert.ok(
+    semver.satisfies(
+      metroConfigPackage.version,
+      metroConfig.dependencies["metro-config"],
+    ),
+  );
+  assert.ok(
+    semver.satisfies(metro.version, reactNative.dependencies["metro-runtime"]),
+  );
   assert.ok(metroNodes.length > 0);
   assert.deepEqual(
-    [...new Set(metroNodes.map(([, packageInfo]) => packageInfo.version))],
-    ["0.87.1"],
+    [...new Set(metroNodes.map(([, info]) => info.version))],
+    [metro.version],
   );
   assert.deepEqual(imageSizeNodes, []);
 });
 
-test("Expo SDK58 native modules stay on a compatible Worklets contract", () => {
+test("Expo SDK58 mobile dependencies match the bundled native module matrix", () => {
   const lockfile = readLockfile();
   const expo = lockfile.packages["node_modules/expo"];
   const expoModulesCore = lockfile.packages["node_modules/expo-modules-core"];
@@ -191,50 +209,128 @@ test("Expo SDK58 native modules stay on a compatible Worklets contract", () => {
   const worklets = lockfile.packages["node_modules/react-native-worklets"];
   const gestureHandler =
     lockfile.packages["node_modules/react-native-gesture-handler"];
-  const safeArea =
-    lockfile.packages["node_modules/react-native-safe-area-context"];
-  const rootPackage = lockfile.packages[""];
+  const rootManifest = JSON.parse(
+    readFileSync(resolve(repoRoot, "package.json"), "utf8"),
+  );
+  const mobileManifest = JSON.parse(
+    readFileSync(resolve(repoRoot, "apps/mobile/package.json"), "utf8"),
+  );
+  const bundledModules = JSON.parse(
+    readFileSync(
+      resolve(repoRoot, "node_modules/expo/bundledNativeModules.json"),
+      "utf8",
+    ),
+  );
+  const expectedExclusions = [
+    "@react-native-async-storage/async-storage",
+    "@sentry/react-native",
+    "@shopify/flash-list",
+  ];
+  const exclusions = mobileManifest.expo?.install?.exclude ?? [];
   const mobilePackage = lockfile.packages["apps/mobile"];
-  const mobileRenderer = lockfile.packages["apps/mobile/node_modules/test-renderer"];
+  const rootReactNative = lockfile.packages["node_modules/react-native"];
+  const mobileRenderer =
+    lockfile.packages["apps/mobile/node_modules/test-renderer"];
 
   assert.ok(expo);
-  assert.equal(expo.version, "58.0.14");
-  assert.equal(rootPackage.devDependencies["react-native"], "0.88.0");
-  assert.equal(rootPackage.devDependencies["@react-native/jest-preset"], "0.88.0");
-  assert.equal(mobilePackage.dependencies["react-native"], "0.88.0");
-  assert.equal(mobilePackage.dependencies["react-native-web"], "~0.21.4");
+  assert.ok(rootManifest.devDependencies);
+  assert.ok(mobileManifest.dependencies);
+  assert.ok(rootReactNative);
+  assert.ok(mobilePackage);
+  assert.deepEqual([...exclusions].sort(), expectedExclusions);
+  assert.ok(semver.satisfies(expo.version, rootManifest.devDependencies.expo));
+  assert.ok(semver.satisfies(expo.version, mobileManifest.dependencies.expo));
+  for (const name of ["expo-constants", "expo-router"]) {
+    const sdkRange = bundledModules[name];
+    const declaredRange = rootManifest.devDependencies[name];
+    const resolved = lockfile.packages[`node_modules/${name}`];
+    assert.ok(semver.subset(declaredRange, sdkRange));
+    assert.ok(resolved);
+    assert.ok(semver.satisfies(resolved.version, sdkRange));
+  }
   assert.equal(
-    lockfile.packages["apps/mobile/node_modules/react-native-web"].version,
-    "0.21.4",
+    rootManifest.devDependencies["react-native"],
+    mobileManifest.dependencies["react-native"],
   );
+  assert.ok(
+    semver.satisfies(
+      rootReactNative.version,
+      mobileManifest.dependencies["react-native"],
+    ),
+  );
+  const reactNativeLine = `~${semver.major(rootReactNative.version)}.${semver.minor(rootReactNative.version)}.0`;
+  for (const name of [
+    "@react-native/jest-preset",
+    "@react-native/metro-config",
+  ]) {
+    const resolved = lockfile.packages[`node_modules/${name}`];
+    assert.ok(resolved);
+    assert.ok(semver.satisfies(resolved.version, reactNativeLine));
+  }
+
+  for (const [name, sdkRange] of Object.entries(bundledModules)) {
+    if (exclusions.includes(name)) continue;
+    const dependencyRange =
+      mobileManifest.dependencies[name] ??
+      mobileManifest.devDependencies?.[name];
+    if (!dependencyRange) continue;
+    assert.ok(
+      semver.subset(dependencyRange, sdkRange),
+      `${name} range ${dependencyRange} must stay within SDK 58's ${sdkRange} range`,
+    );
+    const resolved =
+      lockfile.packages[`apps/mobile/node_modules/${name}`] ??
+      lockfile.packages[`node_modules/${name}`];
+    assert.ok(
+      resolved,
+      `${name} must be present in the mobile dependency graph`,
+    );
+    assert.ok(
+      semver.satisfies(resolved.version, sdkRange),
+      `${name}@${resolved.version} must satisfy SDK 58's ${sdkRange} range`,
+    );
+  }
+
+  for (const name of [
+    "react",
+    "react-dom",
+    "react-native-gesture-handler",
+    "react-native-reanimated",
+    "react-native-safe-area-context",
+    "react-native-screens",
+    "react-native-worklets",
+  ]) {
+    const override = rootManifest.overrides[name];
+    const spec = mobileManifest.dependencies[name];
+    const resolved =
+      lockfile.packages[`apps/mobile/node_modules/${name}`] ??
+      lockfile.packages[`node_modules/${name}`];
+    assert.ok(override, `${name} must retain its reviewed root override`);
+    assert.ok(
+      resolved,
+      `${name} must be present in the mobile dependency graph`,
+    );
+    assert.ok(semver.satisfies(resolved.version, override));
+    assert.ok(semver.satisfies(resolved.version, spec));
+    assert.ok(semver.satisfies(resolved.version, bundledModules[name]));
+  }
+
   assert.equal(mobilePackage.devDependencies.jest, "~30.5.2");
   assert.equal(mobilePackage.devDependencies["@types/jest"], "~30.0.0");
   assert.equal(lockfile.packages["node_modules/jest"].version, "30.5.2");
   assert.equal(lockfile.packages["node_modules/@types/jest"].version, "30.0.0");
-  assert.equal(
-    lockfile.packages["node_modules/@react-native/jest-preset"].version,
-    "0.88.0",
+  assert.ok(
+    semver.satisfies(
+      lockfile.packages["node_modules/jest-expo"].version,
+      bundledModules["jest-expo"],
+    ),
   );
-  assert.equal(lockfile.packages["node_modules/jest-expo"].version, "58.0.11");
   assert.equal(mobileRenderer.version, "1.3.1");
   assert.ok(
     semver.satisfies(
       expoModulesCore.version,
       expo.dependencies["expo-modules-core"],
     ),
-  );
-  assert.match(expoModulesCore.version, /^58\.0\./);
-  assert.equal(reanimated.version, "4.7.1");
-  assert.equal(worklets.version, "0.13.0");
-  assert.equal(gestureHandler.version, "3.3.0");
-  assert.equal(
-    mobilePackage.dependencies["react-native-gesture-handler"],
-    "~3.3.0",
-  );
-  assert.equal(safeArea.version, "5.10.1");
-  assert.equal(
-    mobilePackage.dependencies["react-native-safe-area-context"],
-    "~5.10.1",
   );
   assert.equal(
     expoModulesCore.peerDependencies["react-native-worklets"],
@@ -244,8 +340,82 @@ test("Expo SDK58 native modules stay on a compatible Worklets contract", () => {
     reanimated.peerDependencies["react-native-worklets"],
     /0\.13\.x/,
   );
-  assert.equal(lockfile.packages["node_modules/expo-updates"].version, "58.0.17");
-  assert.equal(lockfile.packages["node_modules/expo-video"].version, "58.0.11");
+  assert.ok(
+    semver.satisfies(
+      worklets.version,
+      expoModulesCore.peerDependencies["react-native-worklets"],
+    ),
+  );
+  assert.ok(
+    semver.satisfies(
+      worklets.version,
+      reanimated.peerDependencies["react-native-worklets"],
+    ),
+  );
+  assert.ok(
+    semver.satisfies(
+      gestureHandler.version,
+      bundledModules["react-native-gesture-handler"],
+    ),
+  );
+});
+
+test("Expo Video exposes native seekable and buffered ranges", () => {
+  const lockfile = readLockfile();
+  const expoVideo = lockfile.packages["node_modules/expo-video"];
+  assert.ok(expoVideo);
+
+  const nativeContracts = [
+    [
+      "android/src/main/java/expo/modules/video/VideoModule.kt",
+      /Property\("seekableTimeRanges"\)/,
+      /Property\("bufferedRanges"\)/,
+    ],
+    [
+      "android/src/main/java/expo/modules/video/player/VideoPlayer.kt",
+      /val seekableTimeRanges:/,
+      /val bufferedRanges:/,
+    ],
+    [
+      "ios/VideoModule.swift",
+      /Property\("seekableTimeRanges"\)/,
+      /Property\("bufferedRanges"\)/,
+    ],
+    [
+      "ios/VideoPlayer.swift",
+      /var seekableTimeRanges:/,
+      /var bufferedTimeRanges:/,
+    ],
+  ];
+
+  for (const [relativePath, ...patterns] of nativeContracts) {
+    const source = readFileSync(
+      resolve(repoRoot, "node_modules/expo-video", relativePath),
+      "utf8",
+    );
+    for (const pattern of patterns) {
+      assert.match(source, pattern, `${relativePath} must expose native ranges`);
+    }
+  }
+});
+
+test("Expo Updates preserves Dev Client package loading in Android tests", () => {
+  const lockfile = readLockfile();
+  const expoUpdates = lockfile.packages["node_modules/expo-updates"];
+  assert.ok(expoUpdates);
+  assert.equal(expoUpdates.version, "58.0.22");
+
+  const source = readFileSync(
+    resolve(
+      repoRoot,
+      "node_modules/expo-updates/android/src/main/java/expo/modules/updates/UpdatesPackage.kt",
+    ),
+    "utf8",
+  );
+  assert.match(
+    source,
+    /if \(isRunningAndroidTest\(\) && !BuildConfig\.USE_DEV_CLIENT\)/,
+  );
 });
 
 test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
