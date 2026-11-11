@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -6,6 +7,13 @@ import {
   readPinnedNpmVersion,
   runCiInstall,
 } from "./ci-install.mjs";
+
+const rootPackage = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+);
+const lockfile = JSON.parse(
+  readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"),
+);
 
 test("reads the pinned npm version from package metadata", () => {
   assert.equal(
@@ -39,6 +47,13 @@ test("installs with scripts disabled and rebuilds only the approved native addon
     "rebuild",
     "--foreground-scripts",
   ]);
+});
+
+test("locks cmake-js for node-datachannel's no-prebuilt rebuild fallback", () => {
+  assert.equal(rootPackage.devDependencies["cmake-js"], "8.0.0");
+  assert.equal(lockfile.packages[""].devDependencies["cmake-js"], "8.0.0");
+  assert.equal(lockfile.packages["node_modules/cmake-js"].version, "8.0.0");
+  assert.equal(lockfile.packages["node_modules/cmake-js"].dev, true);
 });
 
 test("rejects a workflow npm version that diverges from package metadata", () => {
