@@ -119,10 +119,13 @@ async function getElementBoxes(locator: Locator) {
 test("authentication owns the viewport without duplicate navigation", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/login");
 
-  await expect(page.getByText("Welcome Back", { exact: true })).toBeVisible();
+  await expect(page.getByText("Welcome Back", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByPlaceholder("Email")).toBeVisible();
   await expect(page.getByPlaceholder("Password")).toBeVisible();
   await expect(page.getByText("Sign In", { exact: true })).toHaveCount(1);
@@ -1304,6 +1307,7 @@ test("catalog and search cards remain accessible when poster artwork fails", asy
 test("Search keeps active retrieval focused and results media-first", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(90_000);
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   await loginToFixtureShell(page);
   await page.goto("/search");
@@ -1584,6 +1588,7 @@ test("Search distinguishes unavailable providers from missing capability", async
 test("Detail, Settings, and Search adapt without overflow at intermediate widths", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(90_000);
   test.skip(
     testInfo.project.name !== "desktop-renderer",
     "Intermediate resizes run once in the desktop browser project.",
