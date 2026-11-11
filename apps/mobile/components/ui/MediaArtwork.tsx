@@ -30,6 +30,8 @@ type MediaArtworkProps = {
   style?: StyleProp<ViewStyle>;
   imageStyle?: StyleProp<ImageStyle>;
   testID?: string;
+  onFallbackChange?: (fallback: boolean) => void;
+  showFallbackContent?: boolean;
 };
 
 type ArtworkState = "loading" | "ready" | "fallback";
@@ -64,6 +66,8 @@ export function MediaArtwork({
   style,
   imageStyle,
   testID,
+  onFallbackChange,
+  showFallbackContent = true,
 }: MediaArtworkProps) {
   const { colors } = useTheme();
   const { duration } = useUiMotion();
@@ -88,6 +92,10 @@ export function MediaArtwork({
       : sourceUri
         ? "loading"
         : "fallback";
+
+  useEffect(() => {
+    onFallbackChange?.(state === "fallback");
+  }, [onFallbackChange, state]);
 
   // Expo Image maps `accessibilityLabel` to the web `<img alt>` attribute.
   // An explicit empty label keeps decorative artwork out of the accessibility
@@ -177,21 +185,47 @@ export function MediaArtwork({
           testID={testID ? `${testID}-fallback` : undefined}
           style={[styles.fallback, getPointerEventsStyle("none")]}
         >
-          <Ionicons
-            name={fallbackIconFor(variant)}
-            size={variant === "poster" ? 28 : 32}
-            color={colors.textSecondary}
-          />
-          {fallbackTitle ? (
-            <Text
-              numberOfLines={3}
-              style={[styles.fallbackTitle, { color: colors.textSecondary }]}
-            >
-              {fallbackTitle}
-            </Text>
+          {showFallbackContent ? (
+            <>
+              <Ionicons
+                name={fallbackIconFor(variant)}
+                size={variant === "poster" ? 28 : 32}
+                color={colors.textSecondary}
+              />
+              {fallbackTitle ? (
+                <Text
+                  numberOfLines={3}
+                  style={[styles.fallbackTitle, { color: colors.text }]}
+                >
+                  {fallbackTitle}{" "}
+                </Text>
+              ) : null}
+            </>
           ) : null}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/** A decorative poster fallback placed alongside, rather than inside, a web card's control. */
+export function DecorativePosterFallback({ title }: { title: string }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      aria-hidden
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents={getNativePointerEvents("none")}
+      style={[styles.externalFallback, getPointerEventsStyle("none")]}
+    >
+      <Ionicons name="film-outline" size={28} color={colors.textSecondary} />
+      <Text
+        numberOfLines={3}
+        style={[styles.fallbackTitle, { color: colors.text }]}
+      >
+        {title}
+      </Text>
     </View>
   );
 }
@@ -215,6 +249,16 @@ const styles = StyleSheet.create({
   },
   fallback: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: uiSpacing.md,
+    padding: uiSpacing.lg,
+  },
+  externalFallback: {
+    position: "absolute",
+    top: 0,
+    width: "100%",
+    aspectRatio: 2 / 3,
     justifyContent: "center",
     alignItems: "center",
     gap: uiSpacing.md,

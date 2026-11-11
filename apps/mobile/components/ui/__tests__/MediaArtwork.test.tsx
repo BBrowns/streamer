@@ -132,6 +132,30 @@ describe("MediaArtwork", () => {
     expect(screen.getByText("Arrival")).toBeTruthy();
   });
 
+  it("reports fallback changes when artwork fails and a new source loads", async () => {
+    const onFallbackChange = jest.fn();
+    const screen = await render(
+      <MediaArtwork
+        uri="https://images.example.test/broken.jpg"
+        title="Arrival"
+        onFallbackChange={onFallbackChange}
+      />,
+    );
+
+    expect(onFallbackChange).toHaveBeenLastCalledWith(false);
+    await fireEvent(getExpoImages(screen)[0]!, "error");
+    expect(onFallbackChange).toHaveBeenLastCalledWith(true);
+
+    await screen.rerender(
+      <MediaArtwork
+        uri="https://images.example.test/replacement.jpg"
+        title="Arrival"
+        onFallbackChange={onFallbackChange}
+      />,
+    );
+    expect(onFallbackChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("recovers when a refetched item replaces an empty image URL", async () => {
     const screen = await render(<MediaArtwork title="Arrival" uri="" />);
 

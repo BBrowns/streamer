@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import React, { useCallback, useState, type ReactNode } from "react";
 import {
   AccessibilityRole,
   AccessibilityState,
@@ -20,7 +20,7 @@ import {
   uiSpacing,
   uiTypography,
 } from "./designSystem";
-import { MediaArtwork } from "./MediaArtwork";
+import { DecorativePosterFallback, MediaArtwork } from "./MediaArtwork";
 
 export type PosterCardProps = {
   variant?: "poster" | "landscape";
@@ -73,19 +73,29 @@ export function PosterCard({
 }: PosterCardProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
+  const posterUri = typeof poster === "string" ? poster.trim() : "";
+  const [failedPosterUri, setFailedPosterUri] = useState<string>();
+  const onFallbackChange = useCallback(
+    (fallback: boolean) => setFailedPosterUri(fallback ? posterUri : undefined),
+    [posterUri],
+  );
   const { isKeyboardFocused, webPressableProps } = useWebPressableActivation(
     onActivate ?? onPress,
   );
+  const externalFallback =
+    Platform.OS === "web" &&
+    variant === "poster" &&
+    (!posterUri || failedPosterUri === posterUri);
   const accessibleName = [
-    title,
     eyebrow,
+    title,
     metadata,
     rating ? String(rating) : undefined,
   ]
     .filter(Boolean)
     .join(", ");
 
-  return (
+  const card = (
     <Pressable
       // @ts-ignore web-only catalog targeting
       {...({ dataSet: { catalogCard: true } } as any)}
@@ -128,6 +138,10 @@ export function PosterCard({
           title={title}
           variant={variant === "landscape" ? "backdrop" : "poster"}
           accessible={false}
+          showFallbackContent={Platform.OS !== "web" || variant !== "poster"}
+          onFallbackChange={
+            Platform.OS === "web" ? onFallbackChange : undefined
+          }
           style={styles.poster}
         />
 
@@ -170,11 +184,11 @@ export function PosterCard({
             numberOfLines={1}
             style={[styles.eyebrow, { color: colors.textSecondary }]}
           >
-            {eyebrow}
+            {eyebrow}{" "}
           </Text>
         ) : null}
         <Text numberOfLines={2} style={[styles.title, { color: colors.text }]}>
-          {title}
+          {title}{" "}
         </Text>
         {metadata || rating ? (
           <View style={styles.metaRow}>
@@ -183,7 +197,7 @@ export function PosterCard({
                 numberOfLines={1}
                 style={[styles.metadata, { color: colors.textSecondary }]}
               >
-                {metadata}
+                {metadata}{" "}
               </Text>
             ) : null}
             {rating ? (
@@ -201,9 +215,17 @@ export function PosterCard({
       </View>
     </Pressable>
   );
+  if (Platform.OS !== "web" || variant !== "poster") return card;
+  return (
+    <View style={styles.webWrapper}>
+      {card}
+      {externalFallback ? <DecorativePosterFallback title={title} /> : null}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
+  webWrapper: { width: "100%", maxWidth: 240 },
   card: {
     width: "100%",
     maxWidth: 240,

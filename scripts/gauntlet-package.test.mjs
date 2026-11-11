@@ -378,7 +378,7 @@ function startVisualRun(root, put) {
 }
 
 function captureVisual(root, runDirectory, attemptId) {
-  const marker = recordCheckStart({ root, runDirectory, attemptId });
+  const startMarker = recordCheckStart({ root, runDirectory, attemptId });
   const screenshot = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9ioAAAAASUVORK5CYII=",
     "base64",
@@ -386,12 +386,14 @@ function captureVisual(root, runDirectory, attemptId) {
   const screenshotPath = `visual/${attemptId}.png`;
   mkdirSync(join(root, "visual"), { recursive: true });
   writeFileSync(join(root, screenshotPath), screenshot);
-  const startTime = new Date(Date.parse(marker.recordedAt) + 1).toISOString();
+  const endMarker = recordCheckEnd({ root, runDirectory, attemptId });
+  const startTime = startMarker.recordedAt;
+  const duration = Date.parse(endMarker.recordedAt) - Date.parse(startTime);
   const reportPath = `visual/${attemptId}.json`;
   writeFileSync(
     join(root, reportPath),
     JSON.stringify({
-      stats: { startTime, duration: 1 },
+      stats: { startTime, duration },
       suites: [
         {
           title: "visual-regression",
@@ -406,10 +408,8 @@ function captureVisual(root, runDirectory, attemptId) {
                   results: [
                     {
                       status: "passed",
-                      duration: 1,
-                      startTime: new Date(
-                        Date.parse(startTime) + 1,
-                      ).toISOString(),
+                      duration,
+                      startTime,
                       attachments: [
                         {
                           name: "gauntlet-visual:library-phone:dark:390x844",
@@ -427,7 +427,6 @@ function captureVisual(root, runDirectory, attemptId) {
       ],
     }),
   );
-  recordCheckEnd({ root, runDirectory, attemptId });
   return reportPath;
 }
 
@@ -623,6 +622,11 @@ function attachCurrentVisualP1Review(root, pkg, gauntletInputPath) {
 }
 
 test("visual P1 repair is recorded and cannot create a second repair candidate", (t) => {
+  // Captures must remain valid when both markers share the same millisecond.
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-09-29T10:00:00.000Z"),
+  });
   const { root: fixtureRoot, put } = fixture(t);
   const root = realpathSync(fixtureRoot);
   const runDirectory = startVisualRun(root, put);
@@ -635,6 +639,12 @@ test("visual P1 repair is recorded and cannot create a second repair candidate",
     ],
     draft: "Initial candidate with a visual P1 finding.",
   });
+  assert.equal(
+    first.package.gauntletInput.evidence.filter(
+      (item) => item.kind === "visual-screenshot",
+    ).length,
+    1,
+  );
   attachCurrentVisualP1Review(root, first.package, first.gauntletInputPath);
 
   put("a.txt", "first bounded visual repair\n");
@@ -642,9 +652,7 @@ test("visual P1 repair is recorded and cannot create a second repair candidate",
   const repaired = finishPackage({
     root,
     runDirectory,
-    playwrightReports: [
-      { path: repairReport, attemptId: "visual-repair-1" },
-    ],
+    playwrightReports: [{ path: repairReport, attemptId: "visual-repair-1" }],
     draft: "Candidate after the single bounded repair.",
   });
   assert.deepEqual(repaired.package.gauntletInput.repairRounds, [

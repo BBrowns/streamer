@@ -49,8 +49,8 @@ CI also:
   Dependabot updates;
 - queues only safe Dependabot patch/minor PRs for protected auto-merge. Expo,
   React Native, Electron, Prisma, TypeScript, Sentry, Hono, NativeWind,
-  Tailwind, native, and major updates stay manual and require a code-owner
-  review;
+  Tailwind, Jest/Vitest, native, and major updates stay manual and require
+  review by their code owner;
 - applies Prisma migrations in CI instead of mutating the schema with
   `db push`;
 - enforces finite timeouts on every CI and release job;
@@ -71,11 +71,22 @@ Push protection is the preventive secret gate; do not replace it with an ad hoc
 regular-expression scan. If these server-side controls are unavailable or
 disabled, restore an equivalent reviewed scanner before removing this policy.
 
-`CODEOWNERS` keeps the dependency manifests, release workflows, migration
-directory, and security tooling assigned to the repository owner. The master
-ruleset requires at least one approving review; automatic Dependabot merges can
-only enter the merge queue after the required CI and dependency-review checks
-are green.
+`CODEOWNERS` assigns the dependency manifests, release workflows, migration
+directory, and security tooling to the repository owner. That assignment does
+not itself enforce an approving review. Approval counts and code-owner review
+requirements are controlled by the active GitHub master ruleset; check those
+settings before claiming that a review is enforced. Automatic Dependabot
+merges still wait for the required Release Gate, Review Dependency Changes,
+and CodeQL checks. The workflow does not bypass the ruleset.
+
+Dependabot ignore ranges must leave the validated toolchain's patch releases
+available for review. SDK58 uses React Native/tooling 0.88.x, Worklets 0.13.x,
+Reanimated 4.7.x and Jest 30.x. Review these boundaries alongside the dependency
+compatibility contracts after a coordinated migration. Manual version-update
+groups also include the related Jest/Expo presets, scoped React packages,
+Electron tooling and Hono adapters so those packages cannot make an ordinary
+maintenance group ineligible for auto-merge. Workflow tests exercise the real
+auto-merge policy, including missing metadata and mixed protected updates.
 
 `security:audit` rejects **high and critical production dependency findings**.
 It runs npm's production audit and permits only exact, unexpired advisory
@@ -127,7 +138,7 @@ October 2026 lockfile remediation below advances all compatible brace-expansion
 lines beyond their current patched versions.
 
 The root override keeps `js-yaml@4.3.2` for Hono consumers. Nodemailer is
-pinned to `10.1.1` in the root workspace and root override, while the server
+pinned to `10.3.1` in the root workspace and root override, while the server
 workspace declares `^10.0.10`. Nodemailer 10 requires Node.js 20 or newer and
 ships its own TypeScript declarations; the server imports its named
 `Transporter` type from that package, so `@types/nodemailer` is removed. The
@@ -191,16 +202,15 @@ repository dependency maintainers. Remove this override after Minimatch 10
 raises its own minimum to a patched brace-expansion release and a clean lockfile
 resolves that minimum without the override.
 
-The current production audit also reports two packages for which the GitHub
-Advisory Database lists no patched version: `braces@3.0.3` at
-`node_modules/braces` ([GHSA-VFJ7-8CJW-P6XM](https://github.com/advisories/GHSA-VFJ7-8CJW-P6XM))
-and `node-forge@1.4.0` at `node_modules/node-forge`
-([GHSA-86W9-CPQP-85RV](https://github.com/advisories/GHSA-86W9-CPQP-85RV)). The
-audit permits only those exact package paths until 2026-11-19. Owner: mobile
-platform maintainers. Re-check upstream status by that date, upgrade to a fixed
-release as soon as one is available, and remove the matching exception. If
-either package still has no compatible fix on the expiry date, the production
-audit blocks until the exception receives a fresh review.
+The remaining local production remediation is `braces@3.0.3` at
+`node_modules/braces`. The audit verifies the version-bound patch and its
+applied source before accepting the exact reviewed advisory, with review due
+2026-11-19. Owner: mobile platform maintainers. Re-check upstream status by
+that date, upgrade to a compatible fixed release when available, and remove
+the patch registration. After the review deadline the production audit blocks
+until the remediation receives a fresh review. The former node-forge patch
+was removed in the November follow-up below after a compatible upstream
+release became available.
 
 Sources: [Vitest 5 migration](https://vitest.dev/guide/migration),
 [Sentry CLI 3.8 update](https://github.com/getsentry/sentry-cli/compare/3.7.0...3.8.0),
@@ -340,10 +350,11 @@ parse normally. The compatible body-parser resolution advances from 2.3.0
 to 2.4.0. Its Node 18 minimum remains below the repository runtime; no framework,
 native package, install-script permission or audit exception changes here.
 
-The current master already resolves follow-redirects 1.16.1 and the Sentry CLI's
-undici 6.29.1. Existing, verified node-forge patch ownership and its review date
-remain authoritative; a passing policy audit does not mean the unpatched npm
-tarball is free of findings. Owner: platform maintainers. Revisit the Zod
+This October follow-up resolved follow-redirects 1.16.1 and the Sentry CLI's
+undici 6.29.1. The node-forge patch retained in this October follow-up is
+superseded by the upstream release recorded in the November follow-up below.
+A passing policy audit does not imply that the whole dependency tree is free
+of findings. Owner: platform maintainers. Revisit the Zod
 override when all consuming ranges enforce the fixed floor; keep production
 audit, shared schema tests and dependency compatibility checks as the gates.
 
@@ -351,6 +362,92 @@ Sources: [body-parser advisory](https://github.com/advisories/GHSA-27r3-jxmh-p82
 [Zod advisory](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5),
 [Zod 4.6.7 release](https://github.com/colinhacks/zod/releases/tag/v4.6.7),
 [undici 6.29.1 release](https://github.com/nodejs/undici/releases/tag/v6.29.1).
+
+## Framework maintenance follow-up — 2026-10-27
+
+The framework batch defers Expo SDK package updates that would also move the
+config-plugin chain to Xcode 4. React and React DOM remain on 19.3.0,
+gesture-handler remains on 3.3.0, and Expo Video stays on 58.0.11 with its
+existing native patch until a separate compatible migration and native
+validation are available.
+
+The Sentry CLI install-script approval advances from 3.8.0 to exactly 3.8.1;
+the separate 2.58.6 approval remains. The published installer script is byte
+identical to 3.8.0 and uses the version-pinned platform package when present,
+otherwise it can download a binary from the configured CDN. The published
+package includes checksums, but its fallback can skip checksum validation when
+an entry is absent or when explicitly configured to do so. CI disables lifecycle
+scripts during installation and executes only its explicitly reviewed steps.
+The updated platform binaries are integrity-pinned in the lockfile, but were
+not independently audited here. Owner: mobile platform maintainers. Review the
+exact installer and binary provenance again at the next Sentry CLI upgrade.
+Source: [Sentry CLI 3.8.0 to 3.8.1 comparison](https://github.com/getsentry/sentry-cli/compare/3.8.0...3.8.1).
+
+## November 2026 Maintenance Follow-up
+
+The lockfile resolves `node-forge@1.4.2`, which fits the existing Expo consumers'
+`^1.4.0` ranges. Its upstream behavior retains the existing regression contract,
+so `patches/node-forge+1.4.0.patch` and the corresponding audit-policy
+registration are removed. The regression test remains. No replacement audit
+exception or version override is introduced. Source:
+[node-forge 1.4.2 release](https://github.com/digitalbazaar/forge/releases/tag/v1.4.2).
+
+The current compatible Axios dependency also resolves `follow-redirects@1.16.2`
+within its existing `^1.16.0` range. This upstream patch needs no additional
+override, install-script permission or audit exception. Source:
+[follow-redirects 1.16.2 release](https://github.com/follow-redirects/follow-redirects/releases/tag/v1.16.2).
+
+The compatible dependency batch advances Nodemailer to 10.3.1, Axios to 1.21.0,
+TanStack Query to 5.105.0, HLS.js to 1.7.4, i18next to 26.5.11, the Hono API
+reference to 0.12.17, express-rate-limit to 8.7.2, Sentry Node to 11.10.0,
+Sentry React Native to 8.33.0, and Electron to 45.1.0. Nodemailer's root
+declaration and override stay aligned. Expo Blur, Localization, Network and
+Web Browser take compatible SDK58 patches while keeping the existing tilde
+ranges. These dependency updates do not establish physical-device or packaged
+release validation.
+
+The Sentry CLI approval advances from exactly 3.8.1 to exactly 3.8.2; the
+separate 2.58.6 approval remains. The published tarballs' integrity and every
+JavaScript file were compared: the installer and all other JavaScript files
+are byte-identical. Only package metadata, checksums, and a non-lifecycle
+post-release script differ. The existing fallback behavior remains as
+described above; platform binaries have not been independently audited.
+Owner: mobile platform maintainers. Review the exact installer and binary
+provenance again at the next CLI update. Source:
+[Sentry CLI 3.8.2 release](https://github.com/getsentry/sentry-cli/releases/tag/3.8.2).
+
+The maintenance batch retains the tested React 19.3.0, React Native 0.88.0,
+Gesture Handler 3.3.0, safe-area-context 5.10.1, screens 4.30.0 and Jest Expo
+58.0.11 contracts. Expo Video stays at patched 58.0.11; Expo Image stays at
+58.0.15 because 58.0.18 rebuilds iOS binaries against React Native 0.88.1.
+Expo Dev Client, Sharing and Splash Screen retain their tested versions and
+the current config-plugin/Xcode 3 tooling. Owner: mobile platform maintainers.
+Revisit these deferred updates as a coordinated native/tooling migration with
+fresh native build and runtime evidence; do not weaken compatibility tests to
+accept the versions proposed by the automated batch.
+
+The server container advances within Node 26 to the digest-pinned 26.13.0
+Alpine image, and Compose keeps PostgreSQL 18 with an updated immutable image
+digest. The development toolchain remains Node 26.7.0 / npm 12.0.2. Container
+verification uses disposable test resources and does not upgrade an existing
+development or production database.
+
+The subsequent compatible framework maintenance advances Electron from 45.1.0
+to 45.2.0 and the server's separate optional Linux/x64/glibc Rollup helper from
+4.66.0 to 4.67.2. Electron retains the same embedded runtime versions, native
+ABI, dependencies and installer JavaScript; no install-script approval changes
+are required. The Rollup helper has no dependencies or lifecycle scripts, and
+its registry integrity was checked. Root Rollup and its matching native helper
+remain on 4.62.4. These checks do not independently audit the shipped binaries.
+Sources: [Electron 45.2.0 release](https://releases.electronjs.org/release/v45.2.0),
+[Rollup 4.67.2 release](https://github.com/rollup/rollup/releases/tag/v4.67.2).
+
+The coordinated Expo/RN/Xcode updates described above remain deferred. Keep
+mobile manifest declarations aligned with the validated lockfile and root
+overrides; a successful install or browser test alone does not establish a
+supported native migration. Owner: mobile platform maintainers. Removal
+condition: compatible dependency contracts and fresh native build/runtime
+evidence for that migration.
 
 ## Upgrade Routine
 

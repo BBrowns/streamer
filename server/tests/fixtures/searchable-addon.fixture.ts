@@ -138,6 +138,39 @@ function resultsFor(type: string, query: string) {
 export function startSearchAddonFixture() {
   const app = new Hono();
   const requests: SearchAddonFixtureRequest[] = [];
+  const goldenPathRequests: string[] = [];
+
+  app.get("/golden-path/manifest.json", (c) => {
+    goldenPathRequests.push("manifest.json");
+    return c.json({
+      id: "com.streamer.fixture.golden-path",
+      version: "1.0.0",
+      name: "Golden path fixture",
+      description:
+        "Deterministic catalog and stream provider for integration tests",
+      resources: ["catalog", "stream"],
+      types: ["movie"],
+      idPrefixes: ["tt"],
+      catalogs: [{ type: "movie", id: "popular", name: "Popular movies" }],
+    });
+  });
+  app.get("/golden-path/catalog/movie/popular.json", (c) => {
+    goldenPathRequests.push("catalog/movie/popular.json");
+    return c.json({
+      metas: [
+        {
+          id: "tt0111161",
+          type: "movie",
+          name: "Fixture Movie",
+          poster: "https://fixture.example/poster.jpg",
+        },
+      ],
+    });
+  });
+  app.get("/golden-path/stream/movie/tt0111161.json", (c) => {
+    goldenPathRequests.push("stream/movie/tt0111161.json");
+    return c.json({ streams: [] });
+  });
 
   app.get("/searchable/manifest.json", (c) =>
     c.json(SEARCHABLE_ADDON_MANIFEST),
@@ -189,6 +222,7 @@ export function startSearchAddonFixture() {
   return {
     baseUrl: `http://localhost:${port}`,
     requests,
+    goldenPathRequests,
     resetRequests: () => requests.splice(0, requests.length),
     close: () => server.close(),
   };

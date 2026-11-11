@@ -1,5 +1,6 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { Platform } from "react-native";
 import { CatalogItemCard, getCatalogCardPalette } from "../CatalogItemCard";
 import type { MetaPreview } from "@streamer/shared";
 
@@ -73,7 +74,7 @@ describe("CatalogItemCard", () => {
 
     expect(
       screen.getByRole("button", {
-        name: "Example Movie, common.media.movie, 2026, 7.4",
+        name: "common.media.movie, Example Movie, 2026, 7.4",
       }),
     ).toBeTruthy();
   });
@@ -105,6 +106,37 @@ describe("CatalogItemCard", () => {
         uri: poster,
       });
     });
+  });
+
+  it("keeps the title in the web label only once as a failed poster is replaced", async () => {
+    const originalPlatform = Platform.OS;
+    Platform.OS = "web";
+    try {
+      const screen = await render(<CatalogItemCard item={createItem()} />);
+      await fireEvent(getExpoImages(screen)[0]!, "error");
+      await waitFor(() => {
+        expect(screen.getByRole("button").props.accessibilityLabel).toBe(
+          "common.media.movie, Example Movie, 2026, 7.4",
+        );
+      });
+
+      await screen.rerender(
+        <CatalogItemCard
+          item={createItem({
+            poster: "https://images.example.test/replacement.jpg",
+          })}
+        />,
+      );
+      expect(screen.getByRole("button").props.accessibilityLabel).toBe(
+        "common.media.movie, Example Movie, 2026, 7.4",
+      );
+      await fireEvent(getExpoImages(screen)[0]!, "load");
+      expect(screen.getByRole("button").props.accessibilityLabel).toBe(
+        "common.media.movie, Example Movie, 2026, 7.4",
+      );
+    } finally {
+      Platform.OS = originalPlatform;
+    }
   });
 
   it("uses the active artwork focus colour only when rendered in a cinematic rail", async () => {

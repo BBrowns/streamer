@@ -2,6 +2,7 @@ import { expect, describe, it, beforeAll, afterAll } from "vitest";
 import { execSync } from "child_process";
 import { request } from "./test-utils.js";
 import { createApp } from "../src/app";
+import { startSearchAddonFixture } from "./fixtures/searchable-addon.fixture.js";
 
 /**
  * E2E Golden Path Test
@@ -12,8 +13,15 @@ import { createApp } from "../src/app";
  */
 
 const app = createApp();
+let addonFixture: ReturnType<typeof startSearchAddonFixture>;
+let originalPrivateNetworks: string | undefined;
 
 beforeAll(async () => {
+  if (process.env.NODE_ENV !== "test")
+    throw new Error("Test environment required");
+  originalPrivateNetworks = process.env.ADDON_ALLOW_PRIVATE_NETWORKS;
+  process.env.ADDON_ALLOW_PRIVATE_NETWORKS = "true";
+  addonFixture = startSearchAddonFixture();
   const envUrl = process.env.DATABASE_URL;
   const dbUrl =
     envUrl?.startsWith("postgresql://") || envUrl?.startsWith("postgres://")
@@ -32,6 +40,10 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
+  addonFixture?.close();
+  if (originalPrivateNetworks === undefined)
+    delete process.env.ADDON_ALLOW_PRIVATE_NETWORKS;
+  else process.env.ADDON_ALLOW_PRIVATE_NETWORKS = originalPrivateNetworks;
   const { prisma } = await import("../src/prisma/client.js");
   await new Promise((resolve) => setTimeout(resolve, 50));
   if (prisma) await prisma.$disconnect();
@@ -281,14 +293,17 @@ describe("E2E Golden Path", () => {
 
   // --- Addon → Catalog → Stream golden path ---
 
-  it("Step 19: Install Cinemeta addon", async () => {
+  it("Step 19: Install a local fixture addon", async () => {
     const res = await request(app)
       .post("/api/addons")
       .set("Authorization", `Bearer ${accessToken}`)
-      .send({ transportUrl: "https://v3-cinemeta.strem.io/manifest.json" });
+      .send({
+        transportUrl: `${addonFixture.baseUrl}/golden-path/manifest.json`,
+      });
 
     expect(res.status).toBe(201);
     expect(res.body).toBeDefined();
+    expect(addonFixture.goldenPathRequests).toContain("manifest.json");
   });
 
   it("Step 20: Browse catalog after addon install", async () => {
@@ -298,11 +313,18 @@ describe("E2E Golden Path", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.metas).toBeInstanceOf(Array);
-    // Cinemeta should return popular movies
-    expect(res.body.metas.length).toBeGreaterThan(0);
-    expect(res.body.metas[0]).toHaveProperty("id");
-    expect(res.body.metas[0]).toHaveProperty("name");
-    expect(res.body.metas[0]).toHaveProperty("poster");
+    expect(res.body.metas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "tt0111161",
+          name: "Fixture Movie",
+          poster: "https://fixture.example/poster.jpg",
+        }),
+      ]),
+    );
+    expect(addonFixture.goldenPathRequests).toContain(
+      "catalog/movie/popular.json",
+    );
   });
 
   it("Step 21: Fetch streams for a catalog item", async () => {
@@ -311,7 +333,9 @@ describe("E2E Golden Path", () => {
       .set("Authorization", `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.streams).toBeInstanceOf(Array);
-    // Cinemeta doesn't provide streams, so array may be empty — that's valid
+    expect(res.body.streams).toEqual([]);
+    expect(addonFixture.goldenPathRequests).toContain(
+      "stream/movie/tt0111161.json",
+    );
   });
 });

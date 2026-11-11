@@ -1166,6 +1166,35 @@ test("key non-media UI states meet WCAG A/AA accessibility rules", async ({
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
   await loginToFixtureShell(page);
   await expect(page.getByTestId("home-screen")).toBeVisible();
+  if (testInfo.project.name === "phone-web") {
+    for (const label of ["Home", "Search", "Library", "Downloads"]) {
+      const tab = page.getByRole("tab", { name: label });
+      await expect(tab).toBeVisible();
+      const geometry = await tab.evaluate((element) => {
+        const labelNode = Array.from(element.querySelectorAll("*")).find(
+          (node) =>
+            node.textContent?.trim() === element.getAttribute("aria-label") &&
+            node.children.length === 0,
+        );
+        if (!labelNode) throw new Error("Tab label not found");
+        const labelRect = labelNode.getBoundingClientRect();
+        const tabRect = element.getBoundingClientRect();
+        return {
+          labelTop: labelRect.top,
+          labelBottom: labelRect.bottom,
+          tabTop: tabRect.top,
+          tabBottom: tabRect.bottom,
+          viewportBottom: window.innerHeight,
+          clientHeight: labelNode.clientHeight,
+          scrollHeight: labelNode.scrollHeight,
+        };
+      });
+      expect(geometry.labelTop).toBeGreaterThanOrEqual(geometry.tabTop);
+      expect(geometry.scrollHeight).toBeLessThanOrEqual(geometry.clientHeight);
+      expect(geometry.labelBottom).toBeLessThanOrEqual(geometry.tabBottom);
+      expect(geometry.labelBottom).toBeLessThanOrEqual(geometry.viewportBottom);
+    }
+  }
   await expectAccessibleSurface(page, '[data-testid="home-screen"]', "Home");
 
   await page.goto("/settings/playback");
@@ -1178,6 +1207,13 @@ test("key non-media UI states meet WCAG A/AA accessibility rules", async ({
 
   await page.goto("/search?q=Golden");
   await expect(page.getByTestId("search-results-grid")).toBeVisible();
+  const loadedSearchCard = page.getByTestId(
+    `search-result-movie-${FIXTURE_MOVIE_ID}`,
+  );
+  await expect(loadedSearchCard.locator("img")).toHaveCount(1);
+  await expect(loadedSearchCard).toHaveAccessibleName(
+    "Golden Path Adventure, Movie, 2026, 8.8",
+  );
   await expectAccessibleSurface(
     page,
     '[data-testid="search-screen"]',
@@ -1190,6 +1226,79 @@ test("key non-media UI states meet WCAG A/AA accessibility rules", async ({
   const commandPalette = page.getByTestId("command-palette");
   await expect(commandPalette).toBeVisible();
   await expectAccessibleSurface(page, '[role="dialog"]', "Command palette");
+});
+
+test("catalog and search cards remain accessible when poster artwork fails", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !["phone-web", "desktop-renderer"].includes(testInfo.project.name),
+    "The card accessibility check covers compact and large window classes.",
+  );
+
+  await loginToFixtureShell(page);
+  let failedPosters = 0;
+  await page.route("**/golden-path-poster.svg", async (route) => {
+    failedPosters += 1;
+    await route.abort();
+  });
+  await page.reload();
+  await expect(page.getByTestId("home-screen")).toBeVisible();
+  await expect.poll(() => failedPosters).toBeGreaterThan(0);
+
+  if (testInfo.project.name === "desktop-renderer") {
+    const catalogCard = page
+      .locator('[data-catalog-card="true"]')
+      .filter({ hasText: "Second Fixture" })
+      .first();
+    await expect(catalogCard).toBeVisible();
+    await expect(catalogCard.locator("img")).toHaveCount(0);
+    await expect(catalogCard).toHaveAccessibleName(
+      "Movie, Second Fixture, 2026, 8.8",
+    );
+    await expect(
+      catalogCard.locator("..").getByText("Second Fixture", { exact: true }),
+    ).toHaveCount(2);
+    await expectAccessibleSurface(
+      page,
+      '[data-testid="home-screen"]',
+      "Home without poster artwork",
+    );
+    if (process.env.STREAMER_CAPTURE_FALLBACK) {
+      await testInfo.attach("home-without-poster", {
+        body: await page.screenshot(),
+        contentType: "image/png",
+      });
+    }
+  }
+
+  await page.goto("/search?q=Golden");
+  const searchCard = page.getByTestId(
+    `search-result-movie-${FIXTURE_MOVIE_ID}`,
+  );
+  await expect(searchCard).toBeVisible();
+  await expect(searchCard.locator("img")).toHaveCount(0);
+  await expect(searchCard).toHaveAccessibleName(
+    "Golden Path Adventure, Movie, 2026, 8.8",
+  );
+  await expect(
+    searchCard
+      .locator("..")
+      .getByText("Golden Path Adventure", { exact: true }),
+  ).toHaveCount(2);
+  await expectAccessibleSurface(
+    page,
+    '[data-testid="search-screen"]',
+    "Search without poster artwork",
+  );
+  if (process.env.STREAMER_CAPTURE_FALLBACK) {
+    await testInfo.attach("search-without-poster", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
+  }
+  await searchCard.click({ position: { x: 20, y: 20 } });
+  await expect(page).toHaveURL(/\/detail\/movie\//);
 });
 
 test("Search keeps active retrieval focused and results media-first", async ({

@@ -1,4 +1,4 @@
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -9,7 +9,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useUiMotion } from "../../hooks/useUiMotion";
 import { useWebPressableActivation } from "../../hooks/useWebPressableActivation";
 import { getWebFocusStyle, uiMotion } from "../ui/designSystem";
-import { MediaArtwork } from "../ui/MediaArtwork";
+import { DecorativePosterFallback, MediaArtwork } from "../ui/MediaArtwork";
 
 type SearchCardItem = MetaPreview | SearchMetaPreview;
 
@@ -32,6 +32,11 @@ function SearchResultCardInner({
   const { colors, isDark } = useTheme();
   const { reducedMotion } = useUiMotion();
   const posterUri = typeof item.poster === "string" ? item.poster.trim() : "";
+  const [failedPosterUri, setFailedPosterUri] = useState<string>();
+  const onFallbackChange = useCallback(
+    (fallback: boolean) => setFailedPosterUri(fallback ? posterUri : undefined),
+    [posterUri],
+  );
 
   const openDetail = useCallback(() => {
     if (onPress) onPress();
@@ -41,6 +46,10 @@ function SearchResultCardInner({
     useWebPressableActivation(openDetail);
 
   const year = releaseYear(item);
+  const externalFallback =
+    Platform.OS === "web" &&
+    !compact &&
+    (!posterUri || failedPosterUri === posterUri);
   const accessibilityLabel = [
     item.name,
     t(`search.types.${item.type}`),
@@ -50,7 +59,7 @@ function SearchResultCardInner({
     .filter(Boolean)
     .join(", ");
 
-  return (
+  const card = (
     <Pressable
       {...webPressableProps}
       testID={`search-result-${item.type}-${item.id}`}
@@ -81,6 +90,10 @@ function SearchResultCardInner({
           title={compact ? undefined : item.name}
           variant="poster"
           accessible={false}
+          showFallbackContent={Platform.OS !== "web" || compact}
+          onFallbackChange={
+            Platform.OS === "web" ? onFallbackChange : undefined
+          }
           accessibilityLabel={t("search.a11y.poster", {
             title: item.name,
           })}
@@ -97,7 +110,7 @@ function SearchResultCardInner({
           ]}
           numberOfLines={compact ? 1 : 2}
         >
-          {item.name}
+          {item.name}{" "}
         </Text>
         <View style={styles.metadata}>
           <Text style={[styles.metaText, { color: colors.textSecondary }]}>
@@ -134,11 +147,19 @@ function SearchResultCardInner({
       )}
     </Pressable>
   );
+  if (Platform.OS !== "web" || compact) return card;
+  return (
+    <View style={styles.webWrapper}>
+      {card}
+      {externalFallback ? <DecorativePosterFallback title={item.name} /> : null}
+    </View>
+  );
 }
 
 export const SearchResultCard = memo(SearchResultCardInner);
 
 const styles = StyleSheet.create({
+  webWrapper: { flex: 1, minWidth: 0 },
   card: {
     flex: 1,
     minWidth: 0,

@@ -165,7 +165,7 @@ export default function TabLayout() {
           {
             backgroundColor: colors.tabBar,
             borderTopColor: colors.border,
-            height: 64 + insets.bottom,
+            height: 72 + insets.bottom,
             paddingBottom: Math.max(insets.bottom, 8),
           },
           hasSideNavigation && { display: "none" },
