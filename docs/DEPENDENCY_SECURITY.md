@@ -105,6 +105,17 @@ of CI while still producing the checked-in desktop bridge binary. If the
 `node-datachannel` version changes, update the exact allow-list entry and the
 rebuild contract in the same reviewed dependency change.
 
+The published `node-datachannel` package keeps `cmake-js` in its development
+dependencies, although its rebuild fallback invokes that executable when no
+prebuilt binary is available. The root development manifest pins `cmake-js`
+8.0.0 so the existing targeted rebuild can resolve the fallback on every CI
+platform. This uses only the `cmake-js rebuild` CLI from the native dependency;
+the repository's pinned Node 26 runtime meets the tool's Node 20+ requirement.
+`cmake-js` has no install lifecycle script in the pinned release and does not
+need a new `allowScripts` approval. Remove the direct pin if `node-datachannel`
+ships the required build tool or no longer needs the CMake fallback for
+supported CI targets.
+
 Vitest and `@vitest/*` version updates are grouped, including majors, because
 coverage providers require the exact Vitest peer version. These updates remain
 manual. The root Compose manifest uses the `docker-compose` updater; the server
