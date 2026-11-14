@@ -40,6 +40,14 @@ bestandsselectie exact met die van het pakket overeenkomt. Oudere pogingen
 blijven zichtbaar; de kandidaatbrede samenvatting gebruikt de laatste poging
 per controle.
 
+Ruwe Playwright-JSON bevat op zichzelf geen kandidaatidentiteit. Geef bij
+`finish` voor elk Playwright-rapport in dezelfde volgorde de expliciete
+`--playwright-attempt-id` van zijn start- en eindmarker mee. Het rapport telt
+als bewijs voor de actuele kandidaat als de rapporttijden binnen dat geldige
+markerpaar vallen en beide markers dezelfde identiteit als de actuele
+kandidaat vastleggen. Bij een ontbrekende, ongeldige of afwijkende koppeling
+blijft de identiteit van de observatie `unknown`.
+
 `finish` kan daarnaast herhaalde `--qa`, `--playwright`, `--plan`,
 `--amendment-file` en brononderbouwde `--annotation
 '<controle-id>|<execution-kind>|<scope>|<bron>'` gebruiken. Laat de scope
@@ -58,7 +66,9 @@ browserfixture, echt apparaat of extern netwerk.
 
 Het pakket bewaart kandidaatidentiteit, opdracht, bewijsinventaris, afgeleide
 Gauntlet-invoer en conceptoplevering. Technische status en duur komen uit
-beschikbare gestructureerde output. Ontbrekende waarden blijven `unknown`.
+beschikbare gestructureerde output. Een gebonden Playwright-observatie
+bewaart de revisie, fingerprint, het algoritme en de volledige geselecteerde
+bestandslijst van de actuele kandidaat. Ontbrekende waarden blijven `unknown`.
 Markeer afzonderlijk wat uit broninspectie is afgeleid of handmatig is
 waargenomen; een annotatie is geen runnerresultaat. Label componentchecks met
 gemockte callbacks, bediende browserinteracties, native uitvoering en externe

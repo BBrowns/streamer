@@ -1278,6 +1278,134 @@ test("imports Playwright statuses without copying unrelated raw report fields", 
   assert.doesNotMatch(copied, /magnet:|resolvedUrl/);
 });
 
+const playwrightCandidateCases = [
+  { name: "paired and unchanged", markerBinding: "paired", current: true },
+  { name: "missing attempt ID", markerBinding: "missing" },
+  { name: "missing end marker", markerBinding: "incomplete" },
+  { name: "invalid report time", markerBinding: "invalid" },
+  { name: "report outside the markers", markerBinding: "time-mismatch" },
+  { name: "different candidate", markerBinding: "paired" },
+  { name: "code changed during the check", markerBinding: "paired" },
+];
+
+for (const { name, markerBinding, current } of playwrightCandidateCases) {
+  test(`Playwright observation candidate identity with ${name}`, (t) => {
+    const { root, put } = fixture(t);
+    const { runDirectory } = startPackage({
+      root,
+      taskId: "browser-candidate",
+      files: ["b.txt", "a.txt"],
+      task: "Exercise the current browser candidate",
+    });
+    const attemptId = "browser";
+    const start = recordCheckStart({ root, runDirectory, attemptId });
+    const path = "playwright.json";
+    put(
+      path,
+      JSON.stringify({
+        stats: {
+          startTime:
+            name === "report outside the markers"
+              ? "2000-01-01T00:00:00.000Z"
+              : start.recordedAt,
+          duration: name === "invalid report time" ? -1 : 0,
+        },
+        suites: [
+          {
+            title: "flow.spec.ts",
+            specs: [
+              {
+                title: "click chooser",
+                tests: [
+                  {
+                    projectName: "phone-web",
+                    status: "expected",
+                    expectedStatus: "passed",
+                    results: [{ status: "passed", duration: 0 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    if (name === "code changed during the check") put("a.txt", "changed\n");
+    if (name !== "missing end marker")
+      recordCheckEnd({ root, runDirectory, attemptId });
+    if (name === "code changed during the check") put("a.txt", "HEAD a\n");
+    if (name === "different candidate") put("b.txt", "changed after check\n");
+
+    const id = "playwright-1-1";
+    const { package: pkg } = finishPackage({
+      root,
+      runDirectory,
+      playwrightReports: [
+        name === "missing attempt ID" ? path : { path, attemptId },
+      ],
+      annotations: {
+        [id]: {
+          executionKind: "browser-interaction",
+          scope: "local-fixture",
+          source: "flow.spec.ts clicks chooser using local route fixtures",
+        },
+      },
+    });
+    const row = pkg.checkInventory.find((item) => item.id === id);
+    const evidence = pkg.gauntletInput.evidence.find((item) => item.id === id);
+    const {
+      revision,
+      fingerprint,
+      files,
+      fingerprintAlgorithm,
+      candidateBinding,
+    } = evidence;
+    assert.equal(row.attempts[0].markerBinding, markerBinding);
+    assert.equal(evidence.kind, "observation");
+    assert.equal(evidence.scope, "local-fixture");
+    assert.equal(evidence.executionKind, "browser-interaction");
+
+    const candidateCode = {
+      revision: pkg.candidate.revision,
+      fingerprint: pkg.candidate.fingerprint,
+      fingerprintAlgorithm: "sha256-path-nul-content-nul-v1",
+      files: ["a.txt", "b.txt"],
+    };
+    if (current) {
+      assert.deepEqual(
+        { revision, fingerprint, fingerprintAlgorithm, files },
+        candidateCode,
+      );
+      assert.deepEqual(files, pkg.candidate.selectedFiles);
+      assert.equal(candidateBinding, "current");
+    } else {
+      assert.equal(revision, "unknown");
+      assert.equal(fingerprint, "unknown");
+      assert.equal(fingerprintAlgorithm ?? "unknown", "unknown");
+      assert.equal(files, undefined);
+      assert.equal(candidateBinding, "unbound");
+    }
+
+    pkg.gauntletInput.task.requirements = [
+      {
+        id,
+        text: "Browser interaction on the current candidate",
+        runId: "browser-candidate",
+        scope: "local-fixture",
+        expectedExecutionKind: "browser-interaction",
+        evidence: [id],
+        code: candidateCode,
+      },
+    ];
+    const [requirement] = evaluate(pkg.gauntletInput, { root }).requirements;
+    if (current) assert.equal(requirement.state, "supported");
+    else {
+      assert.equal(requirement.state, "open");
+      assert.ok(requirement.reasons.includes("FINGERPRINT_INCOMPARABLE"));
+    }
+  });
+}
+
 test("source-backed browser annotation carries local fixture scope into Gauntlet", (t) => {
   const { root } = fixture(t);
   const { runDirectory } = startPackage({
