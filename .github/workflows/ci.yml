@@ -301,6 +301,8 @@ jobs:
         run: npx --yes "npm@${NPM_VERSION}" run security:audit
       - name: Verify dependency compatibility contracts
         run: npx --yes "npm@${NPM_VERSION}" run dependency:compatibility:test
+      - name: Verify Android Google Cast Gradle pin
+        run: npx --yes "npm@${NPM_VERSION}" run dependency:google-cast-compatibility:test
 
   test-shared:
     name: Shared Tests
