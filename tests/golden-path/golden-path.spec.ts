@@ -814,9 +814,12 @@ test("download eligibility uses a planner action", async ({ page }) => {
     page,
     "download-unsupported",
   );
+  const plannerRequestCount = downloadControls.plannerRequests.length;
   await page.getByRole("button", { name: "Download" }).click();
   await expect(page.getByText("No compatible viewing option")).toBeVisible();
-  expect(downloadControls.plannerRequests.at(-1)?.action).toBe("download");
+  expect(downloadControls.plannerRequests.slice(plannerRequestCount)).toEqual(
+    expect.arrayContaining([expect.objectContaining({ action: "download" })]),
+  );
 });
 
 test("cast eligibility uses a planner action and lists displays", async ({
