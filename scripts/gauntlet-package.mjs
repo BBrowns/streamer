@@ -1485,6 +1485,11 @@ export function finishPackage({
         attempt.markerBinding === "paired" &&
         attempt.matchesCandidate === true &&
         attempt.codeChangedDuringControl === false;
+      const currentPlaywrightReport =
+        row.sourceKind === "playwright-json" &&
+        attempt?.markerBinding === "paired" &&
+        attempt.matchesCandidate === true &&
+        attempt.codeChangedDuringControl === false;
       const kind = currentVerifyReceipt
         ? "verify-change"
         : row.sourceKind === "qa-run" && attempt?.receipt
@@ -1503,8 +1508,14 @@ export function finishPackage({
                   : row.status,
               source: attempt?.receipt ?? "package/checkInventory",
               observedAt: generatedAt,
-              revision: "unknown",
-              fingerprint: "unknown",
+              ...(currentPlaywrightReport
+                ? {
+                    revision: attempt.startRevision,
+                    fingerprint: attempt.startFingerprint,
+                    fingerprintAlgorithm,
+                    files: candidate.selectedFiles,
+                  }
+                : { revision: "unknown", fingerprint: "unknown" }),
             }
           : { path: attempt.receipt, selector: attempt.selector }),
         provenance:
@@ -1512,7 +1523,10 @@ export function finishPackage({
           attempt?.matchesCandidate === false
             ? "historical"
             : "recorded",
-        candidateBinding: currentVerifyReceipt ? "current" : "unbound",
+        candidateBinding:
+          currentVerifyReceipt || currentPlaywrightReport
+            ? "current"
+            : "unbound",
         receiptTimeRelation: attempt?.receiptTimeRelation ?? "unknown",
         executionKind: row.executionKind,
         executionKindSource: row.executionKindSource ?? null,
