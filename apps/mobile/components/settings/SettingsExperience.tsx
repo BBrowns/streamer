@@ -10,6 +10,7 @@ import {
 import * as LocalAuthentication from "expo-local-authentication";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/authStore";
@@ -78,10 +79,7 @@ export function resolveSettingsColumnCount(availableContentWidth: number) {
     : 1;
 }
 
-function formatUpdateStatus(
-  state: DesktopUpdateState | null,
-  t: (key: string, options?: Record<string, unknown>) => string,
-) {
+function formatUpdateStatus(state: DesktopUpdateState | null, t: TFunction) {
   if (!state) return t("settings.update.notLoaded");
   switch (state.status) {
     case "checking":

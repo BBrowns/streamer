@@ -37,7 +37,7 @@ function readinessCopy(
   key: string,
   options?: Record<string, string | number>,
 ): string {
-  return i18n.t(key, options) as string;
+  return options ? i18n.t(key, options) : i18n.t(key);
 }
 
 function actionCopy(group: string, action: PlaybackAction) {

@@ -8,6 +8,7 @@ import {
   type SetStateAction,
 } from "react";
 import { Alert, Platform } from "react-native";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../stores/authStore";
 import {
@@ -32,7 +33,7 @@ function formatCacheCleanupResult(
     removedEntries?: number;
     freedBytes?: number;
   },
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TFunction,
 ) {
   const removedEntries = cleanup.removedEntries ?? 0;
   const entryLabel = removedEntries === 1 ? "entry" : "entries";
@@ -46,7 +47,7 @@ function formatCacheCleanupResult(
 
 function getTorrentCacheLabel(
   cache: BridgeDiagnostics["torrentCache"],
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: TFunction,
 ) {
   if (!cache) return null;
   const used = formatBytes(cache.totalBytes ?? 0) ?? "0 B";

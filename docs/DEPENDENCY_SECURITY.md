@@ -456,6 +456,28 @@ Expo Video 58.0.14 does not expose the native seekable and buffered range proper
 
 Install and compatibility checks do not establish native-device playback. Record simulator and physical-device results separately, and keep physical-device playback evidence as a distinct release requirement.
 
+## i18next v27 mobile baseline — 2026-11-16
+
+The mobile app pins `i18next@27.1.1` and retains `react-i18next` on the 17.1.x
+line. The published `react-i18next@17.1.13` peer range accepts i18next
+`>=26.2.0`, so this combination resolves to one deduped i18next version without
+upgrading the React binding. i18next 27 requires Node.js 22 or newer, within
+the repository's Node.js 26 runtime.
+
+i18next 27 changes `returnEmptyString`'s default from `true` to `false`. The
+mobile app preserves its existing behavior by setting `returnEmptyString: true`
+both in runtime initialization and `CustomTypeOptions`. Its explicit
+`fallbackLng: "en"` remains in place as v27 also changes the fallback-language
+default. A focused regression test covers the empty-translation behavior.
+
+The v27.1.1 release contains a translation-performance improvement with no
+output change; the default changes and migration guidance are documented in
+the v27.0.0 release. Sources: [i18next v27.0.0 migration notes](https://github.com/i18next/i18next/releases/tag/v27.0.0),
+[i18next v27.1.1 release](https://github.com/i18next/i18next/releases/tag/v27.1.1),
+[i18next configuration options](https://www.i18next.com/overview/configuration-options#returnemptystring),
+[i18next@27.1.1 package metadata](https://registry.npmjs.org/i18next/27.1.1),
+and [react-i18next@17.1.13 package metadata](https://registry.npmjs.org/react-i18next/17.1.13).
+
 ## Upgrade Routine
 
 1. Switch to the pinned Node/npm versions.
