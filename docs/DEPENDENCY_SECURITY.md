@@ -258,6 +258,13 @@ the lockfile while preserving the browser API. Remove the override when
 Node adapter; the dependency compatibility test must continue to prove that
 no `file-type` node is present. Owner: mobile/platform maintainers.
 
+`node-vibrant@4.0.4` also ships a nested `browser/package.json` with export
+targets that escape that package root, which Metro rejects.
+`patches/node-vibrant+4.0.4.patch` removes only the nested export map and
+preserves the root `./browser` export. Owner: mobile/platform maintainers.
+Remove the patch when an upstream release removes the stale nested manifest or
+gives it package-local export targets.
+
 `bittorrent-tracker@11.2.3` keeps its local UDP parser patch, while its `ip`
 edge is resolved to `ip-address@10.7.3` through a scoped npm override. The
 tracker tests cover IPv4 conversion and fallback behavior, and the lockfile
