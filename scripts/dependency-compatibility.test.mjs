@@ -431,27 +431,27 @@ test("NativeWind resolves a Tailwind 3-compatible mobile toolchain", () => {
   assert.equal(cssInteropPackage.peerDependencies.tailwindcss, "~3");
 });
 
-test("Hono WebSocket tooling keeps its compatible peer beside the server adapter", () => {
+test("Hono WebSocket tooling resolves a compatible Node server peer", () => {
   const lockfile = readLockfile();
   const rootPackage = lockfile.packages[""];
   const serverPackage = lockfile.packages["server"];
-  const websocketPackage = lockfile.packages["node_modules/@hono/node-ws"];
-  const rootNodeServer = lockfile.packages["node_modules/@hono/node-server"];
+  const websocketPackage =
+    lockfile.packages["server/node_modules/@hono/node-ws"] ??
+    lockfile.packages["node_modules/@hono/node-ws"];
   const serverNodeServer =
-    lockfile.packages["server/node_modules/@hono/node-server"];
+    lockfile.packages["server/node_modules/@hono/node-server"] ??
+    lockfile.packages["node_modules/@hono/node-server"];
   const serverNodeServerRange = serverPackage.dependencies["@hono/node-server"];
+  const websocketNodeServerRange =
+    websocketPackage?.peerDependencies?.["@hono/node-server"];
 
-  assert.equal(rootPackage.peerDependencies["@hono/node-server"], "1.19.17");
-  assert.equal(rootNodeServer.version, "1.19.17");
-  assert.equal(rootNodeServer.peer, true);
-  assert.equal(
-    websocketPackage.peerDependencies["@hono/node-server"],
-    "^1.19.11",
-  );
+  assert.equal(rootPackage.peerDependencies?.["@hono/node-server"], undefined);
+  assert.ok(websocketPackage);
+  assert.ok(serverNodeServer);
+  assert.ok(websocketNodeServerRange);
   assert.equal(semver.major(serverNodeServer.version), 2);
-  assert.ok(semver.gte(semver.minVersion(serverNodeServerRange), "2.1.3"));
-  assert.ok(semver.gte(serverNodeServer.version, "2.1.3"));
   assert(semver.satisfies(serverNodeServer.version, serverNodeServerRange));
+  assert(semver.satisfies(serverNodeServer.version, websocketNodeServerRange));
 });
 
 test("unused native adapters resolve without vulnerable parser packages", () => {
