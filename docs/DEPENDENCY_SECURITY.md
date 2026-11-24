@@ -290,16 +290,12 @@ repository dependency maintainers. Remove the override when the Prisma tooling
 dependency no longer pins the affected version and a clean lockfile resolves a
 patched `effect` release without the override.
 
-The server currently has two intentionally separate Hono Node adapters: the
-server workspace declares the 2.x line, currently locked at
-`@hono/node-server@2.1.3`, while `@hono/node-ws@1.3.1` requires a `^1.19.11`
-peer. Version 2.1.3 includes the fix for the path double-decode middleware
-bypass in GHSA-rmxm-3fg6-px4f. The private root workspace declares the exact
-`@hono/node-server@1.19.17` peer so npm installs that compatibility adapter
-alongside the server-local 2.x package. `npm run dependency:compatibility:test`
-asserts this topology and that the resolved server adapter satisfies its
-workspace range; remove the root peer when `@hono/node-ws` supports the 2.x
-adapter.
+The server uses `@hono/node-server@2.1.11` with `@hono/node-ws@1.3.2`, whose
+peer range accepts the 2.x adapter. This removes the old root
+`@hono/node-server@1.19.17` compatibility peer. The dependency compatibility
+test verifies that the selected adapter satisfies both the server workspace
+range and the WebSocket package's peer range. Preserve this alignment when
+updating either package.
 
 NativeWind `4.2.x` currently brings `react-native-css-interop@0.2.6`, whose
 Tailwind peer contract is the Tailwind 3 line. The mobile workspace therefore
@@ -307,9 +303,9 @@ pins `tailwindcss@3.4.19`; keep the compatibility test in place and review the
 NativeWind migration before accepting a Tailwind 4 major bump.
 
 The mobile app now follows Expo SDK58's React `19.3.0`, React Native
-`0.88.0`, Reanimated `4.7.1`, Worklets `0.13.0`, safe-area-context
-`5.10.1`, and react-native-screens `4.30.0` compatibility versions. Sentry
-React Native `8.31.x`, AsyncStorage `3.1.1`, and Flash List `2.3.3` remain
+`0.88.1`, Reanimated `4.7.1`, Worklets `0.13.0`, safe-area-context
+`5.11.1`, and react-native-screens `4.30.1` compatibility versions. Sentry
+React Native `8.36.0`, AsyncStorage `3.1.1`, and Flash List `2.3.3` remain
 intentional `expo.install.exclude` exceptions because the workspace tracks
 them above the SDK's bundled recommendations. These exclusions are not
 permission to skip native validation. AsyncStorage 3 keeps its
@@ -317,10 +313,10 @@ permission to skip native validation. AsyncStorage 3 keeps its
 validation remains deferred.
 
 The current native/tooling migration keeps the Expo SDK58 contract on React
-`19.3.0` and React Native `0.88.0`. Root and mobile workspaces pin React
-Native and `@react-native/jest-preset` to `0.88.0` so npm's hoisted Expo peer
+`19.3.0` and React Native `0.88.1`. Root and mobile workspaces pin React
+Native and `@react-native/jest-preset` to `0.88.1` so npm's hoisted Expo peer
 dependencies cannot resolve an older RN line. React Native Testing Library
-`14.0.1` uses `test-renderer@1.3.1`, and `jest-expo@58.0.11` aligns with the
+`14.0.1` uses `test-renderer@1.3.1`, and `jest-expo@58.0.15` aligns with the
 SDK preset and Jest `30.5.2` with `@types/jest@30.0.0`. Expo Modules Core 58
 accepts Worklets `>=0.13.0`, matching Reanimated `4.7.1`. These modules use
 the New Architecture and require a fresh native rebuild; prebuild and simulator
@@ -346,10 +342,10 @@ accessibility, and web pointer contracts intact. Keep
 enable the RNGH Jest setup, and run the mobile suite plus iOS/Android smoke
 builds before merging a future RNGH, React Native, or Expo major upgrade.
 
-The server direct Hono Node adapter follows the 2.x line (currently `2.1.3`);
-`@hono/node-ws@1.3.1` resolves its `^1.19.11` peer to the root
-`@hono/node-server@1.19.17` package. The desktop app uses Electron `44.5.1` and
-direct `@electron/notarize` `3.1.1`; electron-builder may retain its own nested
+The server direct Hono Node adapter follows the 2.x line (currently `2.1.11`);
+`@hono/node-ws@1.3.2` resolves its `^2.1.6` peer to that adapter. The desktop
+app uses Electron `45.4.1` and
+direct `@electron/notarize` `3.1.2`; electron-builder may retain its own nested
 notarize 2.x contract. Keep these package paths as explicit compatibility
 boundaries rather than forcing global overrides.
 
