@@ -283,6 +283,13 @@ server/mobile direct dependencies resolve one compatible version. Keep the
 override and direct specifications aligned when upgrading Hono so the Hono
 adapters and shared client code are verified against one runtime contract.
 
+`@prisma/config@7.10.1` pins `effect@3.20.0`, which the production audit
+reports for GHSA-7589-6FVF-X4PW. The exact root override selects the upstream
+fixed `effect@3.22.1` without changing the coordinated Prisma version. Owner:
+repository dependency maintainers. Remove the override when the Prisma tooling
+dependency no longer pins the affected version and a clean lockfile resolves a
+patched `effect` release without the override.
+
 The server currently has two intentionally separate Hono Node adapters: the
 server workspace declares the 2.x line, currently locked at
 `@hono/node-server@2.1.3`, while `@hono/node-ws@1.3.1` requires a `^1.19.11`
