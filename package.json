@@ -76,9 +76,6 @@
     "postinstall": "patch-package",
     "prepare": "husky"
   },
-  "peerDependencies": {
-    "@hono/node-server": "1.19.17"
-  },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.60.0",
@@ -90,7 +87,7 @@
     "electron": "^45.0.0",
     "expo": "~58.0.24",
     "expo-constants": "~58.0.16",
-    "expo-router": "~58.0.31",
+    "expo-router": "~58.0.32",
     "husky": "^9.1.7",
     "lint-staged": "^17.3.0",
     "nodemailer": "10.6.1",
