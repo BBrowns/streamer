@@ -175,12 +175,12 @@ major override:
   removed during the SDK58 upgrade because the resolved Expo Router dependency
   graph no longer installs that package. If a future SDK reintroduces it, add a
   consumer-level parsing regression before restoring a patch or override.
-- `stream-json@3.6.0` replaces the vulnerable 1.x dependency used only by
+- `stream-json@3.7.0` replaces the vulnerable 1.x dependency used only by
   Detox and Bunyamin. Their pinned patches select the new JSONL/array entry
   points and explicit Node stream adapters. Bunyamin's CommonJS, ESM and
   TypeScript entry points stay aligned. Node 26 supports the synchronous ESM
   import used by Detox. Owner: test infrastructure maintainers. Remove these
-  parser patches and the override when Detox/Bunyamin adopt stream-json 3.6+
+  parser patches and the override when Detox/Bunyamin adopt stream-json 3.7+
   upstream. The compatibility tests cover chunked records, malformed JSONL,
   stream completion and trace merging in both module formats.
 
@@ -205,11 +205,11 @@ resolved version.
 The lockfile resolves `brace-expansion` to 1.1.21, 2.1.7, and 5.0.12, which
 include the published fixes for [GHSA-6J4F-FJ2G-MC7P](https://github.com/advisories/GHSA-6J4F-FJ2G-MC7P)
 and [GHSA-QHR7-859C-M2P7](https://github.com/advisories/GHSA-QHR7-859C-M2P7).
-The root override applies only to `brace-expansion` under Minimatch 10, keeping
-the other Minimatch major lines on their compatible patched releases. Owner:
-repository dependency maintainers. Remove this override after Minimatch 10
-raises its own minimum to a patched brace-expansion release and a clean lockfile
-resolves that minimum without the override.
+The former scoped `brace-expansion` override was removed when the vulnerable
+Minimatch 9 and 10 consumers moved to `minimatch@11.0.9`, whose own dependency
+range requires the patched 5.x line. Older Minimatch 3.x and 5.x copies stay on
+their compatible patched brace-expansion lines. The dependency compatibility
+test checks that no locked Minimatch version remains in the affected range.
 
 The remaining local production remediation is `braces@3.0.3` at
 `node_modules/braces`. The audit verifies the version-bound patch and its
@@ -228,13 +228,12 @@ Sources: [Vitest 5 migration](https://vitest.dev/guide/migration),
 
 ## Compatibility Overrides
 
-Detox `20.51.4` still calls the callback-style `glob` export, while the
-workspace keeps `glob@13` for the patched transitive toolchain. The scoped
-`patches/detox+20.51.4.patch` adapts Detox's artifact globber to the Promise API
-without downgrading the shared `glob` override. The dependency compatibility
-test verifies that Detox loads; remove the patch when Detox publishes support
-for the current glob API (or when the workspace no longer needs the glob
-override). Owner: mobile/platform maintainers.
+The vulnerable glob 9.x through 14.0.1 ranges are upgraded at the affected
+consumer edges. `@electron/asar` and `test-exclude@6` keep glob 7, and Detox
+keeps glob 8 because its artifact globber uses the callback API. The Detox patch
+therefore only adapts its JSONL parser for the maintained `stream-json` API. The
+dependency compatibility test exercises Detox artifact lookup and archive
+creation through `@electron/asar`.
 
 `castv2-client@1.2.0` is the current published release but depends on the old
 `castv2` package, which declares `protobufjs@^6.8.8`. The repository forces
@@ -487,6 +486,31 @@ the v27.0.0 release. Sources: [i18next v27.0.0 migration notes](https://github.c
 [i18next configuration options](https://www.i18next.com/overview/configuration-options#returnemptystring),
 [i18next@27.1.1 package metadata](https://registry.npmjs.org/i18next/27.1.1),
 and [react-i18next@17.1.13 package metadata](https://registry.npmjs.org/react-i18next/17.1.13).
+
+## November 2026 Dependabot Remediation
+
+The lockfile now resolves vulnerable glob consumers to `glob@14.0.6` while
+keeping `glob@7.2.3` for `@electron/asar` and `test-exclude@6`, and `glob@8.1.0`
+for Detox. It also resolves `minimatch@11.0.9`, `fast-uri@3.1.9` and
+`stream-json@3.7.0`. The scoped Minimatch overrides move
+consumers that still request 9.x or 10.x onto 11.0.9; the older 3.x and 5.x
+copies remain on their compatible release lines. Compatibility coverage checks
+the lockfile ranges and the named APIs used by Expo and Electron tooling. The
+`@electron/universal` override matches only its `minimatch@^9.0.0` edge; a
+broader override would also reach `@electron/asar` and `dir-compare`, which
+still require Minimatch 3.x. The compatibility test checks that override scope
+and keeps those descendants within their declared ranges.
+Sources: [glob advisory](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4),
+[Minimatch advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249),
+[fast-uri advisory](https://github.com/advisories/GHSA-w74x-v6f9-j3xg),
+[stream-json advisory](https://github.com/advisories/GHSA-jj87-hc4r-jwfw).
+
+Owner: repository dependency maintainers. Remove the scoped Minimatch
+overrides after each affected parent declares a compatible 11.x range and the
+lockfile keeps every copy outside the affected ranges without those overrides.
+Recheck consumer compatibility tests at that point. The Detox and Bunyamin
+parser patches remain until both upstream dependencies support stream-json 3.7+
+without their local API adapters.
 
 ## Upgrade Routine
 

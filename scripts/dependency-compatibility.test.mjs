@@ -96,10 +96,146 @@ test("Expo config tooling generates valid Xcode project UUIDs", () => {
   assert.match(project.generateUuid(), /^[0-9A-F]{24}$/);
 });
 
-test("Detox remains loadable with the workspace glob override", () => {
+test("Detox remains loadable with its supported glob 8 dependency", () => {
   const detox = require("detox");
 
   assert.ok(detox);
+});
+
+test("Detox artifact globbing keeps its glob 8 callback API", async () => {
+  const temporaryPath = require("detox/src/artifacts/utils/temporaryPath");
+  const basename = `streamer-glob-${process.pid}`;
+  const artifactPath = temporaryPath.for.jsonl(basename);
+  writeFileSync(artifactPath, "{}\n");
+
+  try {
+    assert.ok(temporaryPath.find.jsonl.sync(basename).includes(artifactPath));
+    assert.ok(
+      (await temporaryPath.find.jsonl.async(basename)).includes(artifactPath),
+    );
+  } finally {
+    rmSync(artifactPath, { force: true });
+  }
+});
+
+test("glob 14 keeps its promise matching API available to patched consumers", async () => {
+  const glob = require("glob");
+
+  assert.equal(typeof glob.glob, "function");
+  assert.equal(typeof glob.sync, "function");
+  assert.deepEqual(await glob.glob("package.json", { cwd: repoRoot }), [
+    "package.json",
+  ]);
+});
+
+test("glob remediation preserves legacy callback-era glob consumers", async () => {
+  const { packages } = readLockfile();
+  const testExcludeEntry = require.resolve("test-exclude");
+  const testExcludeRequire = createRequire(testExcludeEntry);
+  const testExclude = testExcludeRequire("test-exclude");
+  const legacyGlob = testExcludeRequire("glob");
+  const asarEntry = require.resolve("@electron/asar");
+  const asarRequire = createRequire(asarEntry);
+  const asar = asarRequire("@electron/asar");
+  const asarGlob = asarRequire("glob");
+  const archiverUtilsEntry = require.resolve("archiver-utils");
+  const archiverUtilsRequire = createRequire(archiverUtilsEntry);
+  const archiverGlob = archiverUtilsRequire("glob");
+
+  assert.equal(typeof testExclude, "function");
+  assert.equal(typeof legacyGlob, "function");
+  assert.equal(typeof legacyGlob.sync, "function");
+  assert.equal(typeof asarGlob, "function");
+  assert.equal(typeof asarGlob.glob, "function");
+  assert.equal(typeof archiverGlob.sync, "function");
+  assert.ok(
+    semver.satisfies(
+      packages["node_modules/@electron/asar/node_modules/glob"].version,
+      "^7.1.6",
+    ),
+  );
+  assert.ok(
+    semver.satisfies(
+      packages["node_modules/test-exclude/node_modules/glob"].version,
+      "^7.1.4",
+    ),
+  );
+  assert.ok(
+    semver.satisfies(
+      packages["node_modules/detox/node_modules/glob"].version,
+      "^8.0.3",
+    ),
+  );
+
+  const directory = mkdtempSync(resolve(tmpdir(), "streamer-legacy-glob-"));
+  const archivePath = `${directory}.asar`;
+  writeFileSync(resolve(directory, "sample.js"), "module.exports = true;\n");
+  try {
+    const exclude = new testExclude({ cwd: directory, extension: [".js"] });
+    assert.deepEqual(await exclude.glob(), ["sample.js"]);
+    await asar.createPackage(directory, archivePath);
+    assert.ok(asar.listPackage(archivePath).includes("/sample.js"));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+    rmSync(archivePath, { force: true });
+  }
+});
+
+test("Minimatch 11 keeps the imports used by Expo and Electron tooling", () => {
+  const { Minimatch, minimatch } = require("minimatch");
+  const { packages } = readLockfile();
+  const universalOverride = require("../package.json").overrides[
+    "@electron/universal"
+  ];
+
+  assert.equal(minimatch("src/index.js", "**/*.js"), true);
+  assert.equal(new Minimatch("**/*.js").match("src/index.js"), true);
+  assert.ok(require("@expo/fingerprint"));
+  assert.equal(
+    typeof require("@electron/universal").makeUniversalApp,
+    "function",
+  );
+  assert.equal(universalOverride["minimatch@^9.0.0"], "11.0.9");
+  assert.equal(universalOverride.minimatch, undefined);
+
+  for (const parent of [
+    "node_modules/@electron/asar",
+    "node_modules/dir-compare",
+  ]) {
+    const spec = packages[parent].dependencies.minimatch;
+    const nestedPath = `${parent}/node_modules/minimatch`;
+    const resolved = packages[nestedPath] ?? packages["node_modules/minimatch"];
+    assert.ok(
+      semver.satisfies(resolved.version, spec),
+      `${parent} must resolve a Minimatch version compatible with ${spec}`,
+    );
+  }
+});
+
+test("Dependabot-targeted lockfile entries stay outside affected ranges", () => {
+  const { packages } = readLockfile();
+  const installed = (name) =>
+    Object.entries(packages)
+      .filter(
+        ([path]) =>
+          path === `node_modules/${name}` ||
+          path.endsWith(`/node_modules/${name}`),
+      )
+      .map(([path, info]) => ({ path, version: info.version }));
+  const assertNoAffected = (name, range) => {
+    const entries = installed(name);
+    assert.ok(entries.length > 0, `expected ${name} in the lockfile`);
+    assert.deepEqual(
+      entries.filter(({ version }) => semver.satisfies(version, range)),
+      [],
+      `${name} must not resolve inside ${range}`,
+    );
+  };
+
+  assertNoAffected("glob", ">=9.0.0 <=14.0.1");
+  assertNoAffected("minimatch", ">=7.0.0 <11.0.1");
+  assertNoAffected("fast-uri", ">=3.0.0 <3.1.9");
+  assertNoAffected("stream-json", ">=2.0.0 <=3.6.0");
 });
 
 test("the stream-json override only serves migrated Detox and Bunyamin consumers", () => {
@@ -109,7 +245,7 @@ test("the stream-json override only serves migrated Detox and Bunyamin consumers
     .map(([path]) => path)
     .sort();
   assert.deepEqual(consumers, ["node_modules/bunyamin", "node_modules/detox"]);
-  assert.equal(packages["node_modules/stream-json"].version, "3.6.0");
+  assert.equal(packages["node_modules/stream-json"].version, "3.7.0");
 });
 
 test("Detox JSONL parsing preserves records across input chunks", async () => {
