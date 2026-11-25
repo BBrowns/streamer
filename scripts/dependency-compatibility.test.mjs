@@ -96,10 +96,77 @@ test("Expo config tooling generates valid Xcode project UUIDs", () => {
   assert.match(project.generateUuid(), /^[0-9A-F]{24}$/);
 });
 
-test("Detox remains loadable with the workspace glob override", () => {
+test("Detox remains loadable with the glob 14 workspace override", () => {
   const detox = require("detox");
 
   assert.ok(detox);
+});
+
+test("glob 14 keeps its promise matching API available to Detox", async () => {
+  const glob = require("glob");
+
+  assert.equal(typeof glob.glob, "function");
+  assert.equal(typeof glob.sync, "function");
+  assert.deepEqual(await glob.glob("package.json", { cwd: repoRoot }), [
+    "package.json",
+  ]);
+});
+
+test("Minimatch 11 keeps the imports used by Expo and Electron tooling", () => {
+  const { Minimatch, minimatch } = require("minimatch");
+  const { packages } = readLockfile();
+  const universalOverride = require("../package.json").overrides[
+    "@electron/universal"
+  ];
+
+  assert.equal(minimatch("src/index.js", "**/*.js"), true);
+  assert.equal(new Minimatch("**/*.js").match("src/index.js"), true);
+  assert.ok(require("@expo/fingerprint"));
+  assert.equal(
+    typeof require("@electron/universal").makeUniversalApp,
+    "function",
+  );
+  assert.equal(universalOverride["minimatch@^9.0.0"], "11.0.9");
+  assert.equal(universalOverride.minimatch, undefined);
+
+  for (const parent of [
+    "node_modules/@electron/asar",
+    "node_modules/dir-compare",
+  ]) {
+    const spec = packages[parent].dependencies.minimatch;
+    const nestedPath = `${parent}/node_modules/minimatch`;
+    const resolved = packages[nestedPath] ?? packages["node_modules/minimatch"];
+    assert.ok(
+      semver.satisfies(resolved.version, spec),
+      `${parent} must resolve a Minimatch version compatible with ${spec}`,
+    );
+  }
+});
+
+test("Dependabot-targeted lockfile entries stay outside affected ranges", () => {
+  const { packages } = readLockfile();
+  const installed = (name) =>
+    Object.entries(packages)
+      .filter(
+        ([path]) =>
+          path === `node_modules/${name}` ||
+          path.endsWith(`/node_modules/${name}`),
+      )
+      .map(([path, info]) => ({ path, version: info.version }));
+  const assertNoAffected = (name, range) => {
+    const entries = installed(name);
+    assert.ok(entries.length > 0, `expected ${name} in the lockfile`);
+    assert.deepEqual(
+      entries.filter(({ version }) => semver.satisfies(version, range)),
+      [],
+      `${name} must not resolve inside ${range}`,
+    );
+  };
+
+  assertNoAffected("glob", ">=9.0.0 <=14.0.1");
+  assertNoAffected("minimatch", ">=7.0.0 <11.0.1");
+  assertNoAffected("fast-uri", ">=3.0.0 <3.1.9");
+  assertNoAffected("stream-json", ">=2.0.0 <=3.6.0");
 });
 
 test("the stream-json override only serves migrated Detox and Bunyamin consumers", () => {
@@ -109,7 +176,7 @@ test("the stream-json override only serves migrated Detox and Bunyamin consumers
     .map(([path]) => path)
     .sort();
   assert.deepEqual(consumers, ["node_modules/bunyamin", "node_modules/detox"]);
-  assert.equal(packages["node_modules/stream-json"].version, "3.6.0");
+  assert.equal(packages["node_modules/stream-json"].version, "3.7.0");
 });
 
 test("Detox JSONL parsing preserves records across input chunks", async () => {
