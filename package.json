@@ -116,8 +116,37 @@
     "http-cache-semantics": "4.3.0",
     "nodemailer": "10.6.1",
     "zod": "^4.6.7",
-    "rimraf": "^6.0.1",
-    "glob": "^14.0.3",
+    "rimraf": {
+      ".": "^6.0.1",
+      "glob": "^14.0.3"
+    },
+    "@sentry/bundler-plugins@10": {
+      "glob": "^14.0.3"
+    },
+    "@sentry/bundler-plugins@11.10.0": {
+      "glob": "^14.0.3"
+    },
+    "@jest/reporters@30": {
+      "glob": "^14.0.3"
+    },
+    "jest-config@30": {
+      "glob": "^14.0.3"
+    },
+    "jest-runtime@30": {
+      "glob": "^14.0.3"
+    },
+    "archiver-utils@5": {
+      "glob": "^14.0.3"
+    },
+    "@electron/asar": {
+      "glob": "^7.2.3"
+    },
+    "test-exclude@7": {
+      "glob": "^14.0.3"
+    },
+    "test-exclude@6": {
+      "glob": "^7.2.3"
+    },
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native-gesture-handler": "3.3.0",
@@ -167,6 +196,7 @@
       "ws": "^8.21.0"
     },
     "detox": {
+      "glob": "^8.0.3",
       "ws": "7.5.11"
     },
     "jsdom": {

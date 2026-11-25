@@ -228,14 +228,12 @@ Sources: [Vitest 5 migration](https://vitest.dev/guide/migration),
 
 ## Compatibility Overrides
 
-Detox `20.51.4` still calls the callback-style `glob` export, while the
-workspace keeps `glob@14` for the patched transitive toolchain. The scoped
-`patches/detox+20.51.4.patch` adapts Detox's artifact globber to the Promise API
-without downgrading the shared `glob` override. The dependency compatibility
-test verifies that Detox loads and that the Promise API resolves matches;
-remove the patch when Detox publishes support for the current glob API (or
-when the workspace no longer needs the glob override). Owner: mobile/platform
-maintainers.
+The vulnerable glob 9.x through 14.0.1 ranges are upgraded at the affected
+consumer edges. `@electron/asar` and `test-exclude@6` keep glob 7, and Detox
+keeps glob 8 because its artifact globber uses the callback API. The Detox patch
+therefore only adapts its JSONL parser for the maintained `stream-json` API. The
+dependency compatibility test exercises Detox artifact lookup and archive
+creation through `@electron/asar`.
 
 `castv2-client@1.2.0` is the current published release but depends on the old
 `castv2` package, which declares `protobufjs@^6.8.8`. The repository forces
@@ -491,8 +489,10 @@ and [react-i18next@17.1.13 package metadata](https://registry.npmjs.org/react-i1
 
 ## November 2026 Dependabot Remediation
 
-The lockfile now resolves `glob@14.0.6`, `minimatch@11.0.9`,
-`fast-uri@3.1.9` and `stream-json@3.7.0`. The scoped Minimatch overrides move
+The lockfile now resolves vulnerable glob consumers to `glob@14.0.6` while
+keeping `glob@7.2.3` for `@electron/asar` and `test-exclude@6`, and `glob@8.1.0`
+for Detox. It also resolves `minimatch@11.0.9`, `fast-uri@3.1.9` and
+`stream-json@3.7.0`. The scoped Minimatch overrides move
 consumers that still request 9.x or 10.x onto 11.0.9; the older 3.x and 5.x
 copies remain on their compatible release lines. Compatibility coverage checks
 the lockfile ranges and the named APIs used by Expo and Electron tooling. The
